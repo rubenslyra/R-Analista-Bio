@@ -1,0 +1,620 @@
+---
+title: "Aula 02: Tidyverse e Manipulação de Dados Forenses"
+subtitle: "Módulo 01 - Fundamentos de R para Bioinformática"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+```
+
+## 🎯 Objetivos da Aula
+
+Ao final desta aula, você será capaz de:
+
+1. Compreender a filosofia do **tidyverse** e dados "tidy"
+2. Utilizar o **pipe operator** (`|>` ou `%>%`) para encadear operações
+3. Manipular dados com **dplyr**: `filter`, `select`, `mutate`, `summarise`, `arrange`
+4. Transformar dados com **tidyr**: `pivot_longer`, `pivot_wider`
+5. Aplicar essas técnicas em **dados forenses reais** (simulados)
+6. Criar visualizações exploratórias com **ggplot2**
+
+---
+
+## 1. O que é o Tidyverse?
+
+### 1.1 Filosofia Tidy Data
+
+O tidyverse é uma coleção de pacotes R projetados para trabalhar juntos, compartilhando uma filosofia comum de design:
+
+- **Dados tidy**: cada variável é uma coluna, cada observação é uma linha, cada valor é uma célula
+- **Sintaxe consistente**: funções com nomes verbais e comportamento previsível
+- **Pipe-first**: encadeamento natural de operações
+- **Visualização integrada**: ggplot2 como parte do fluxo de análise
+
+### 1.2 Pacotes Principais
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      TIDYVERSE                              │
+├──────────────┬──────────────────────────────────────────────┤
+│ dplyr        │ Manipulação de dados (filter, mutate, ...)   │
+│ tidyr        │ Transformação de formato (pivot, nest, ...)  │
+│ readr        │ Leitura de dados tabulares                   │
+│ ggplot2      │ Visualização de dados                        │
+│ purrr        │ Programação funcional (map, reduce, ...)     │
+│ stringr      │ Manipulação de strings                       │
+│ forcats      │ Manipulação de fatores                       │
+│ lubridate    │ Manipulação de datas e tempos                │
+│ tibble       │ Data frames modernos                         │
+└──────────────┴──────────────────────────────────────────────┘
+```
+
+### 1.3 Instalação e Carregamento
+
+```{r install-tidyverse, eval=FALSE}
+# Instalar todos os pacotes do tidyverse
+install.packages("tidyverse")
+
+# Ou instalar pacotes individuais
+install.packages(c("dplyr", "tidyr", "readr", "ggplot2"))
+```
+
+```{r load-tidyverse}
+# Carregar o tidyverse completo
+library(tidyverse)
+
+# Verificar versão
+packageVersion("tidyverse")
+```
+
+---
+
+## 2. O Pipe Operator
+
+### 2.1 Por que usar pipes?
+
+Sem pipes, o código fica difícil de ler:
+
+```{r no-pipe, eval=FALSE}
+# Código sem pipe - difícil de ler
+resultado <- summarise(
+  group_by(
+    filter(
+      mutate(dados, nova_coluna = calculo),
+      condicao == TRUE
+    ),
+    grupo
+  ),
+  media = mean(valor)
+)
+```
+
+Com pipes, o código flui naturalmente:
+
+```{r with-pipe, eval=FALSE}
+# Código com pipe - leitura esquerda → direita, cima → baixo
+resultado <- dados |>
+  mutate(nova_coluna = calculo) |>
+  filter(condicao == TRUE) |>
+  group_by(grupo) |>
+  summarise(media = mean(valor))
+```
+
+### 2.2 Dois tipos de pipe
+
+```{r pipe-types}
+# Pipe nativo do R (>= 4.1.0) - recomendado
+dados |> head()
+
+# Pipe do magrittr (compatibilidade)
+dados %>% head()
+
+# Ambos funcionam igual na maioria dos casos
+# Use |> para código novo, %>% para compatibilidade com tutoriais antigos
+```
+
+### 2.3 Placeholder especial
+
+Quando a função não recebe o dado como primeiro argumento:
+
+```{r pipe-placeholder}
+# Pipe nativo usa _ como placeholder
+c("DNA", "RNA", "Proteína") |>
+  paste(_, collapse = ", ")
+
+# magrittr usa . como placeholder
+c("DNA", "RNA", "Proteína") %>%
+  paste(., collapse = ", ")
+```
+
+---
+
+## 3. dplyr: Manipulação de Dados
+
+### 3.1 Dataset Forense de Exemplo
+
+Vamos usar um dataset simulado de amostras forenses:
+
+```{r create-dataset}
+# Criar dataset de amostras forenses
+amostras_forenses <- tibble(
+  id = paste0("AM", sprintf("%03d", 1:50)),
+  tipo = sample(c("sangue", "saliva", "tecido", "osso", "cabelo"),
+                50, replace = TRUE, prob = c(0.35, 0.25, 0.20, 0.10, 0.10)),
+  dna_concentracao_ng_ul = round(runif(50, 0.5, 80), 1),
+  ratio_260_280 = round(runif(50, 1.2, 2.1), 2),
+  degradado = sample(c(TRUE, FALSE), 50, replace = TRUE, prob = c(0.25, 0.75)),
+  data_analise = as.Date("2026-09-01") + sample(0:60, 50, replace = TRUE),
+  analista = sample(c("Silva", "Santos", "Oliveira", "Costa"),
+                    50, replace = TRUE),
+  caso_prioridade = sample(c("alta", "media", "baixa"),
+                           50, replace = TRUE, prob = c(0.2, 0.5, 0.3))
+)
+
+# Visão geral
+glimpse(amostras_forenses)
+head(amostras_forenses, 10)
+```
+
+### 3.2 filter(): Filtrar Linhas
+
+```{r filter-examples}
+# Filtrar amostras de sangue
+sangue <- amostras_forenses |>
+  filter(tipo == "sangue")
+
+cat("Amostras de sangue:", nrow(sangue), "\n")
+
+# Filtros combinados (AND)
+sangue_bom <- amostras_forenses |>
+  filter(tipo == "sangue", ratio_260_280 >= 1.8)
+
+cat("Sangue com boa qualidade:", nrow(sangue_bom), "\n")
+
+# OU lógico
+tipos_especiais <- amostras_forenses |>
+  filter(tipo %in% c("osso", "cabelo"))
+
+cat("Amostras especiais:", nrow(tipos_especiais), "\n")
+
+# Condições numéricas complexas
+amostras_criticas <- amostras_forenses |>
+  filter(dna_concentracao_ng_ul < 5 | degradado == TRUE)
+
+cat("Amostras críticas:", nrow(amostras_criticas), "\n")
+
+# Filtro por intervalo de datas
+analises_outubro <- amostras_forenses |>
+  filter(between(data_analise, as.Date("2026-10-01"), as.Date("2026-10-31")))
+
+cat("Análises em outubro:", nrow(analises_outubro), "\n")
+```
+
+### 3.3 select(): Selecionar Colunas
+
+```{r select-examples}
+# Selecionar colunas específicas
+ids_e_tipos <- amostras_forenses |>
+  select(id, tipo, dna_concentracao_ng_ul)
+
+# Excluir colunas
+sem_analista <- amostras_forenses |>
+  select(-analista, -caso_prioridade)
+
+# Selecionar por padrão de nome
+colunas_dna <- amostras_forenses |>
+  select(starts_with("dna"), starts_with("ratio"))
+
+# Renomear durante seleção
+renomeado <- amostras_forenses |>
+  select(
+    amostra_id = id,
+    tipo_amostra = tipo,
+    concentracao = dna_concentracao_ng_ul
+  )
+
+# Helpers úteis: everything(), where(), contains(), ends_with()
+numericas <- amostras_forenses |>
+  select(where(is.numeric))
+
+head(numericas)
+```
+
+### 3.4 mutate(): Criar/Modificar Colunas
+
+```{r mutate-examples}
+# Criar nova coluna baseada em existente
+com_qualidade <- amostras_forenses |>
+  mutate(
+    classificacao_qualidade = case_when(
+      ratio_260_280 >= 1.8 ~ "Alta",
+      ratio_260_280 >= 1.6 ~ "Média",
+      TRUE ~ "Baixa"
+    ),
+    # Concentração em ng/mL (converter unidade)
+    dna_concentracao_ng_ml = dna_concentracao_ng_ul * 1000,
+    # Flag para amostra problemática
+    precisa_atencao = degradado | dna_concentracao_ng_ul < 5
+  )
+
+head(com_qualidade[, c("id", "classificacao_qualidade", "precisa_atencao")])
+
+# Modificar coluna existente
+atualizado <- amostras_forenses |>
+  mutate(
+    tipo = str_to_upper(tipo),
+    data_analise = format(data_analise, "%d/%m/%Y")
+  )
+
+# Operações condicionais
+com_categoria <- amostras_forenses |>
+  mutate(
+    categoria_concentracao = cut(
+      dna_concentracao_ng_ul,
+      breaks = c(0, 5, 20, 50, Inf),
+      labels = c("Muito Baixa", "Baixa", "Média", "Alta"),
+      right = TRUE
+    )
+  )
+
+table(com_categoria$categoria_concentracao)
+```
+
+### 3.5 arrange(): Ordenar Linhas
+
+```{r arrange-examples}
+# Ordenar por concentração crescente
+por_concentracao <- amostras_forenses |>
+  arrange(dna_concentracao_ng_ul)
+
+# Ordenar decrescente
+por_concentracao_desc <- amostras_forenses |>
+  arrange(desc(dna_concentracao_ng_ul))
+
+# Múltiplas colunas
+ordenado_composto <- amostras_forenses |>
+  arrange(tipo, desc(dna_concentracao_ng_ul))
+
+head(ordenado_composto[, c("id", "tipo", "dna_concentracao_ng_ul")])
+```
+
+### 3.6 summarise() e group_by(): Agregações
+
+```{r summarise-examples}
+# Resumo global
+resumo_global <- amostras_forenses |>
+  summarise(
+    n_amostras = n(),
+    conc_media = mean(dna_concentracao_ng_ul),
+    conc_mediana = median(dna_concentracao_ng_ul),
+    conc_dp = sd(dna_concentracao_ng_ul),
+    prop_degradadas = mean(degradado)
+  )
+
+print(resumo_global)
+
+# Agrupar e resumir
+resumo_por_tipo <- amostras_forenses |>
+  group_by(tipo) |>
+  summarise(
+    n = n(),
+    conc_media = mean(dna_concentracao_ng_ul),
+    conc_min = min(dna_concentracao_ng_ul),
+    conc_max = max(dna_concentracao_ng_ul),
+    prop_degradadas = mean(degradado),
+    .groups = "drop"  # Remove agrupamento após summarise
+  )
+
+print(resumo_por_tipo)
+
+# Múltiplos níveis de agrupamento
+resumo_completo <- amostras_forenses |>
+  group_by(tipo, caso_prioridade) |>
+  summarise(
+    n = n(),
+    conc_media = mean(dna_concentracao_ng_ul),
+    .groups = "drop"
+  )
+
+print(resumo_completo)
+```
+
+### 3.7 Encadeando Tudo Junto
+
+```{r full-pipeline}
+# Pipeline completo de análise forense
+relatorio_amostras <- amostras_forenses |>
+  # Filtrar apenas amostras recentes
+  filter(data_analise >= as.Date("2026-10-01")) |>
+  # Criar classificações
+  mutate(
+    qualidade = case_when(
+      ratio_260_280 >= 1.8 & !degradado ~ "Excelente",
+      ratio_260_280 >= 1.6 & !degradado ~ "Boa",
+      degradado & dna_concentracao_ng_ul >= 5 ~ "Aceitável",
+      TRUE ~ "Crítica"
+    ),
+    dias_desde_analise = as.numeric(Sys.Date() - data_analise)
+  ) |>
+  # Agrupar e resumir
+  group_by(tipo, qualidade) |>
+  summarise(
+    n_amostras = n(),
+    conc_media = round(mean(dna_concentracao_ng_ul), 1),
+    dias_medios = round(mean(dias_desde_analise), 0),
+    .groups = "drop"
+  ) |>
+  # Ordenar resultado
+  arrange(tipo, desc(n_amostras))
+
+print(relatorio_amostras)
+```
+
+---
+
+## 4. tidyr: Transformação de Dados
+
+### 4.1 Dados Longos vs Largos
+
+Em bioinformática forense, frequentemente precisamos alternar entre formatos:
+
+- **Wide (largo)**: marcadores STR como colunas (bom para visualizar perfis)
+- **Long (longo)**: cada marcador é uma linha (bom para análise estatística)
+
+```{r wide-data-example}
+# Criar dados no formato WIDE (perfil genético típico)
+perfis_str_wide <- tibble(
+  amostra_id = c("REF_001", "QST_001", "QST_002"),
+  D3S1358 = c("15/17", "14/16", "15/15"),
+  TH01 = c("7/9.3", "6/9", "8/9.3"),
+  D21S11 = c("28/30", "29/31", "28/28"),
+  D18S51 = c("14/17", "13/16", "15/17"),
+  vWA = c("14/18", "15/17", "16/18"),
+  FGA = c("22/24", "21/23", "22/25")
+)
+
+cat("Formato WIDE (como aparece em laudos):\n")
+print(perfis_str_wide)
+```
+
+### 4.2 pivot_longer(): Wide → Long
+
+```{r pivot-longer}
+# Converter para formato LONG
+perfis_str_long <- perfis_str_wide |>
+  pivot_longer(
+    cols = -amostra_id,      # Todas exceto amostra_id
+    names_to = "marcador",   # Nome da nova coluna de variáveis
+    values_to = "genotipo"   # Nome da nova coluna de valores
+  )
+
+cat("\nFormato LONG (para análise):\n")
+print(perfis_str_long)
+
+# Separar alelos em colunas distintas
+perfis_com_alelos <- perfis_str_long |>
+  separate(genotipo, into = c("alelo1", "alelo2"), sep = "/")
+
+print(perfis_com_alelos)
+```
+
+### 4.3 pivot_wider(): Long → Wide
+
+```{r pivot-wider}
+# Voltar para formato WIDE
+perfis_volta_wide <- perfis_str_long |>
+  pivot_wider(
+    names_from = marcador,
+    values_from = genotipo
+  )
+
+print(perfis_volta_wide)
+
+# Verificar se recuperamos os dados originais
+identical(perfis_str_wide, perfis_volta_wide)
+```
+
+### 4.4 Aplicações Forenses Práticas
+
+```{r forensic-pivot-application}
+# Exemplo: Dados de RFU (intensidade de pico) em formato longo
+rfu_data_long <- tibble(
+  amostra = rep(c("AM001", "AM002"), each = 6),
+  marcador = rep(c("D3S1358", "TH01", "D21S11", "D18S51", "vWA", "FGA"), 2),
+  alelo = c(15, 17, 7, 9.3, 28, 30, 14, 16, 6, 9, 29, 31),
+  rfu = c(2845, 2156, 3012, 2789, 3890, 3456, 2567, 2234, 3201, 2890, 4102, 3567)
+)
+
+cat("Dados de RFU (formato longo):\n")
+print(rfu_data_long)
+
+# Converter para wide para comparar amostras lado a lado
+rfu_wide <- rfu_data_long |>
+  pivot_wider(
+    names_from = c(marcador, alelo),
+    values_from = rfu,
+    names_sep = "_alelo_"
+  )
+
+cat("\nDados de RFU (formato wide para comparação):\n")
+print(rfu_wide)
+
+# Calcular ratio de balanceamento alélico (forense importante!)
+rfu_balance <- rfu_data_long |>
+  group_by(amostra, marcador) |>
+  summarise(
+    rfu_max = max(rfu),
+    rfu_min = min(rfu),
+    balance_ratio = rfu_min / rfu_max,
+    .groups = "drop"
+  ) |>
+  mutate(
+    status_balance = case_when(
+      balance_ratio >= 0.7 ~ "OK",
+      balance_ratio >= 0.5 ~ "Atenção",
+      TRUE ~ "Alerta - Possível mistura/degradação"
+    )
+  )
+
+cat("\nBalanceamento alélico (QC forense):\n")
+print(rfu_balance)
+```
+
+---
+
+## 5. ggplot2: Visualização de Dados Forenses
+
+### 5.1 Gramática dos Gráficos
+
+O ggplot2 segue uma estrutura consistente:
+
+```r
+ggplot(data = dados, aes(x = variavel_x, y = variavel_y)) +
+  geom_ponto_ou_linha() +
+  labs(title = "Título", x = "Eixo X", y = "Eixo Y") +
+  theme_minimal()
+```
+
+### 5.2 Histograma de Concentração de DNA
+
+```{r histogram-dna}
+# Distribuição de concentração de DNA nas amostras
+ggplot(amostras_forenses, aes(x = dna_concentracao_ng_ul)) +
+  geom_histogram(bins = 15, fill = "#2E86AB", color = "white", alpha = 0.9) +
+  geom_vline(aes(xintercept = mean(dna_concentracao_ng_ul)),
+             color = "#E94F37", linetype = "dashed", linewidth = 1) +
+  labs(
+    title = "Distribuição da Concentração de DNA",
+    subtitle = "Linha vermelha = média das amostras",
+    x = "Concentração (ng/µL)",
+    y = "Número de Amostras"
+  ) +
+  theme_minimal(base_size = 14) +
+  annotate("text", x = mean(amostras_forenses$dna_concentracao_ng_ul) + 5,
+           y = Inf, vjust = 2,
+           label = paste("Média:", round(mean(amostras_forenses$dna_concentracao_ng_ul), 1)),
+           color = "#E94F37")
+```
+
+### 5.3 Boxplot por Tipo de Amostra
+
+```{r boxplot-tipo}
+# Comparação de concentração por tipo de amostra
+ggplot(amostras_forenses, aes(x = reorder(tipo, dna_concentracao_ng_ul),
+                               y = dna_concentracao_ng_ul,
+                               fill = tipo)) +
+  geom_boxplot(alpha = 0.8, outlier.color = "#E94F37", outlier.size = 3) +
+  coord_flip() +
+  labs(
+    title = "Concentração de DNA por Tipo de Amostra",
+    x = "Tipo de Amostra",
+    y = "Concentração (ng/µL)"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+```
+
+### 5.4 Scatter Plot com Facetas
+
+```{r scatter-facet}
+# Relação entre ratio 260/280 e concentração, facetado por status
+ggplot(amostras_forenses, aes(x = ratio_260_280, y = dna_concentracao_ng_ul,
+                               color = degradado)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_hline(yintercept = 5, linetype = "dashed", color = "gray50") +
+  geom_vline(xintercept = 1.8, linetype = "dashed", color = "gray50") +
+  facet_wrap(~tipo, scales = "free_y") +
+  labs(
+    title = "Qualidade vs Quantidade de DNA",
+    subtitle = "Linhas tracejadas = thresholds de QC",
+    x = "Ratio 260/280",
+    y = "Concentração (ng/µL)",
+    color = "Degradado?"
+  ) +
+  scale_color_manual(values = c("#2E86AB", "#E94F37"), labels = c("Não", "Sim")) +
+  theme_minimal(base_size = 12)
+```
+
+### 5.5 Heatmap de Perfis STR (Visualização Forense Clássica)
+
+```{r heatmap-str, eval=FALSE}
+# Exemplo conceitual - requer dados reais de RFU
+# library(pheatmap)
+# pheatmap(matriz_rfu,
+#          cluster_rows = TRUE,
+#          cluster_cols = FALSE,
+#          color = colorRampPalette(c("white", "#2E86AB", "#E94F37"))(100),
+#          main = "Perfil de Intensidades Alélicas")
+```
+
+---
+
+## 6. Exercícios Práticos
+
+### Exercício 1: Pipeline dplyr Completo
+
+Carregue o dataset `amostras_forenses_aula01.csv` e crie um relatório resumido que:
+1. Filtre amostras analisadas em outubro de 2026
+2. Classifique qualidade baseada no ratio 260/280
+3. Agrupe por tipo e qualidade
+4. Calcule estatísticas descritivas de concentração
+5. Ordene por número de amostras (decrescente)
+
+### Exercício 2: Transformação Wide ↔ Long
+
+Crie um dataset de perfis STR com 5 amostras e 6 marcadores no formato wide. Depois:
+a) Converta para formato long
+b) Separe os alelos em colunas distintas
+c) Calcule a frequência de cada alelo por marcador
+d) Volte ao formato wide e verifique integridade
+
+### Exercício 3: Visualização Forense
+
+Usando o dataset do exercício 1, crie:
+a) Um histograma facetado por tipo de amostra
+b) Um boxplot comparando ratio 260/280 entre amostras degradadas e não degradadas
+c) Um gráfico de barras empilhadas mostrando proporção de qualidade por analista
+
+---
+
+## 7. Boas Práticas em Análise Forense
+
+| Princípio | Implementação no Tidyverse |
+|-----------|---------------------------|
+| **Rastreabilidade** | Scripts documentados com pipes legíveis |
+| **Reprodutibilidade** | Código funcional sem efeitos colaterais |
+| **Validação** | Verificações intermediárias com `stopifnot()` |
+| **Documentação** | Comentários explicando critérios forenses |
+| **Auditoria** | `sessionInfo()` ao final de cada análise |
+
+> ⚖️ **Nota Legal**: Em análises forenses reais, todo pipeline computacional deve ser validado segundo normas ISO 17025 e diretrizes SWGDAM/ENFSI antes de uso em casos judiciais.
+
+---
+
+## 📝 Resumo da Aula
+
+Nesta aula você aprendeu:
+- ✅ Filosofia tidy data e pacotes do tidyverse
+- ✅ Pipe operator (`|>` e `%>%`) para código legível
+- ✅ Manipulação com dplyr: filter, select, mutate, summarise, arrange
+- ✅ Transformação com tidyr: pivot_longer, pivot_wider, separate
+- ✅ Visualização forense com ggplot2
+- ✅ Aplicações práticas com dados forenses simulados
+
+### Próxima Aula
+**Aula 03: Bioconductor e Pacotes Especializados** — vamos explorar pacotes específicos para análise de dados genômicos e forenses no ecossistema R/Bioconductor.
+
+```{r session-info-final}
+sessionInfo()
+```

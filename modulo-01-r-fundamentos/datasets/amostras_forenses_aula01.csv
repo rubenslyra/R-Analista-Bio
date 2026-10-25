@@ -1,0 +1,11 @@
+id,tipo,dna_concentracao_ng_ul,ratio_260_280,degradado,data_analise,analista
+AM001,sangue,25.4,1.82,FALSE,2026-10-01,Silva
+AM002,saliva,18.7,1.79,FALSE,2026-10-02,Santos
+AM003,tecido,42.1,1.85,FALSE,2026-10-03,Silva
+AM004,sangue,8.3,1.65,TRUE,2026-10-04,Oliveira
+AM005,osso,3.2,1.45,TRUE,2026-10-05,Santos
+AM006,saliva,31.5,1.88,FALSE,2026-10-06,Silva
+AM007,sangue,15.9,1.72,FALSE,2026-10-07,Oliveira
+AM008,tecido,5.1,1.55,TRUE,2026-10-08,Santos
+AM009,sangue,22.8,1.81,FALSE,2026-10-09,Silva
+AM010,osso,7.6,1.60,TRUE,2026-10-10,Oliveira

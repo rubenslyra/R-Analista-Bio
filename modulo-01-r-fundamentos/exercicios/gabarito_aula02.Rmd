@@ -1,0 +1,263 @@
+---
+title: "Gabarito - Exercícios da Aula 02"
+subtitle: "Módulo 01 - Tidyverse e Manipulação de Dados Forenses"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+```
+
+## Exercício 1: Pipeline dplyr Completo
+
+### Enunciado
+Carregue o dataset `amostras_forenses_aula01.csv` e crie um relatório resumido que:
+1. Filtre amostras analisadas em outubro de 2026
+2. Classifique qualidade baseada no ratio 260/280
+3. Agrupe por tipo e qualidade
+4. Calcule estatísticas descritivas de concentração
+5. Ordene por número de amostras (decrescente)
+
+### Solução
+
+```{r exercicio1}
+# Carregar dados
+amostras <- read.csv("../datasets/amostras_forenses_aula01.csv",
+                     stringsAsFactors = FALSE) |>
+  mutate(data_analise = as.Date(data_analise))
+
+# Pipeline completo
+relatorio_outubro <- amostras |>
+  # 1. Filtrar outubro de 2026
+  filter(between(data_analise, as.Date("2026-10-01"), as.Date("2026-10-31"))) |>
+
+  # 2. Classificar qualidade pelo ratio 260/280
+  mutate(
+    qualidade = case_when(
+      ratio_260_280 >= 1.8 ~ "Alta",
+      ratio_260_280 >= 1.6 ~ "Media",
+      TRUE ~ "Baixa"
+    )
+  ) |>
+
+  # 3 & 4. Agrupar e calcular estatísticas
+  group_by(tipo, qualidade) |>
+  summarise(
+    n_amostras = n(),
+    conc_media = round(mean(dna_concentracao_ng_ul), 2),
+    conc_dp = round(sd(dna_concentracao_ng_ul), 2),
+    conc_min = min(dna_concentracao_ng_ul),
+    conc_max = max(dna_concentracao_ng_ul),
+    .groups = "drop"
+  ) |>
+
+  # 5. Ordenar por número de amostras (decrescente)
+  arrange(desc(n_amostras))
+
+cat("Relatório de Amostras - Outubro 2026:\n")
+print(relatorio_outubro)
+```
+
+### Explicação
+- O pipeline encadeia operações de forma legível e reprodutível
+- `case_when()` é preferível a múltiplos `ifelse()` aninhados para classificações com mais de duas categorias
+- `.groups = "drop"` evita warnings sobre agrupamento residual após `summarise()`
+- Em contexto forense, esse tipo de relatório auxilia na triagem de amostras e alocação de recursos
+
+---
+
+## Exercício 2: Transformação Wide ↔ Long
+
+### Enunciado
+Crie um dataset de perfis STR com 5 amostras e 6 marcadores no formato wide. Depois:
+a) Converta para formato long
+b) Separe os alelos em colunas distintas
+c) Calcule a frequência de cada alelo por marcador
+d) Volte ao formato wide e verifique integridade
+
+### Solução
+
+```{r exercicio2}
+# Criar dataset wide com 5 amostras e 6 marcadores
+perfis_wide <- tibble(
+  amostra_id = paste0("REF_", sprintf("%03d", 1:5)),
+  D3S1358 = c("15/17", "14/16", "15/15", "16/18", "14/15"),
+  TH01 = c("7/9.3", "6/9", "8/9.3", "7/7", "9/9.3"),
+  D21S11 = c("28/30", "29/31", "28/28", "30/31", "28/29"),
+  D18S51 = c("14/17", "13/16", "15/17", "14/15", "16/17"),
+  vWA = c("14/18", "15/17", "16/18", "14/16", "17/18"),
+  FGA = c("22/24", "21/23", "22/25", "23/24", "21/22")
+)
+
+cat("Formato WIDE original:\n")
+print(perfis_wide)
+
+# a) Converter para long
+perfis_long <- perfis_wide |>
+  pivot_longer(
+    cols = -amostra_id,
+    names_to = "marcador",
+    values_to = "genotipo"
+  )
+
+cat("\nFormato LONG:\n")
+print(head(perfis_long, 12))
+
+# b) Separar alelos
+perfis_alelos <- perfis_long |>
+  separate(genotipo, into = c("alelo1", "alelo2"), sep = "/")
+
+cat("\nCom alelos separados:\n")
+print(head(perfis_alelos, 12))
+
+# c) Frequência alélica por marcador
+freq_alelica <- perfis_alelos |>
+  pivot_longer(cols = c(alelo1, alelo2), names_to = "qual_alelo", values_to = "alelo") |>
+  count(marcador, alelo, name = "contagem") |>
+  group_by(marcador) |>
+  mutate(frequencia = contagem / sum(contagem)) |>
+  arrange(marcador, desc(frequencia)) |>
+  ungroup()
+
+cat("\nFrequências alélicas:\n")
+print(freq_alelica)
+
+# d) Voltar para wide e verificar integridade
+perfis_volta_wide <- perfis_long |>
+  pivot_wider(names_from = marcador, values_from = genotipo)
+
+identicos <- identical(perfis_wide, perfis_volta_wide)
+cat("\nDados recuperados são idênticos ao original?", identicos, "\n")
+
+if (!identicos) {
+  cat("Verificando diferenças...\n")
+  print(all.equal(perfis_wide, perfis_volta_wide))
+}
+```
+
+### Explicação
+- A transformação wide → long → wide é fundamental em análises forenses onde dados chegam em formatos diferentes
+- `separate()` divide genótipos concatenados ("15/17") em componentes individuais para análise estatística
+- Cálculo de frequências alélicas é base para estimativas de raridade de perfil e likelihood ratios
+- Verificação de integridade (`identical()`) garante que transformações não corromperam dados — essencial em forense
+
+---
+
+## Exercício 3: Visualização Forense
+
+### Enunciado
+Usando o dataset do exercício 1, crie:
+a) Um histograma facetado por tipo de amostra
+b) Um boxplot comparando ratio 260/280 entre amostras degradadas e não degradadas
+c) Um gráfico de barras empilhadas mostrando proporção de qualidade por analista
+
+### Solução
+
+```{r exercicio3}
+# Preparar dados com classificação de qualidade
+dados_viz <- read.csv("../datasets/amostras_forenses_aula01.csv",
+                      stringsAsFactors = FALSE) |>
+  mutate(
+    data_analise = as.Date(data_analise),
+    qualidade = case_when(
+      ratio_260_280 >= 1.8 ~ "Alta",
+      ratio_260_280 >= 1.6 ~ "Media",
+      TRUE ~ "Baixa"
+    ),
+    degradado_label = ifelse(degradado, "Degradada", "Não Degradada")
+  )
+
+# a) Histograma facetado por tipo
+p1 <- ggplot(dados_viz, aes(x = dna_concentracao_ng_ul)) +
+  geom_histogram(bins = 8, fill = "#2E86AB", color = "white", alpha = 0.9) +
+  facet_wrap(~tipo, scales = "free_y") +
+  labs(
+    title = "Distribuição de Concentração de DNA por Tipo de Amostra",
+    x = "Concentração (ng/µL)",
+    y = "Contagem"
+  ) +
+  theme_minimal(base_size = 12)
+
+print(p1)
+
+# b) Boxplot de ratio 260/280 por status de degradação
+p2 <- ggplot(dados_viz, aes(x = degradado_label, y = ratio_260_280, fill = degradado_label)) +
+  geom_boxplot(alpha = 0.8, outlier.color = "#E94F37", outlier.size = 3) +
+  geom_hline(yintercept = 1.8, linetype = "dashed", color = "#E94F37") +
+  annotate("text", x = 2.3, y = 1.82, label = "Threshold QC (1.8)",
+           color = "#E94F37", size = 3.5, hjust = 1) +
+  scale_fill_manual(values = c("#2E86AB", "#E94F37")) +
+  labs(
+    title = "Qualidade do DNA: Ratio 260/280 por Status de Degradação",
+    x = "Status da Amostra",
+    y = "Ratio 260/280",
+    fill = "Status"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+
+print(p2)
+
+# c) Barras empilhadas: proporção de qualidade por analista
+p3 <- dados_viz |>
+  count(analista, qualidade) |>
+  group_by(analista) |>
+  mutate(proporcao = n / sum(n)) |>
+  ungroup() |>
+  ggplot(aes(x = analista, y = proporcao, fill = qualidade)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.9) +
+  scale_fill_brewer(palette = "RdYlGn", direction = -1) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Proporção de Qualidade das Amostras por Analista",
+    x = "Analista Responsável",
+    y = "Proporção de Amostras",
+    fill = "Qualidade"
+  ) +
+  theme_minimal(base_size = 12)
+
+print(p3)
+```
+
+### Explicação
+- **Histograma facetado**: permite comparar distribuições entre tipos de amostra sem sobreposição visual
+- **Boxplot com threshold**: linha tracejada indica critério de aceitação QC; amostras abaixo requerem atenção especial
+- **Barras empilhadas**: monitoramento de desempenho por analista é requisito de sistemas de gestão da qualidade (ISO 17025)
+- Paleta `RdYlGn` (vermelho-amarelo-verde) comunica intuitivamente qualidade baixa-média-alta
+
+---
+
+## Conceitos-Chave Revisados
+
+| Função | Uso Forense |
+|--------|-------------|
+| `filter()` | Selecionar amostras por critérios QC, data, tipo |
+| `mutate()` + `case_when()` | Classificar qualidade, criar flags de alerta |
+| `group_by()` + `summarise()` | Relatórios por lote, analista, tipo de amostra |
+| `pivot_longer()` | Normalizar perfis STR para análise estatística |
+| `pivot_wider()` | Gerar tabelas comparativas lado a lado |
+| `separate()` | Decompor genótipos em alelos individuais |
+| `ggplot2` + `facet_wrap()` | Explorar padrões em subgrupos de amostras |
+
+---
+
+## ⚖️ Nota sobre Validação Forense
+
+> Todo código de análise forense deve passar por **validação de método** antes de uso em casos reais. Isso inclui:
+> - Testes com dados conhecidos (controles positivos/negativos)
+> - Verificação de reprodutibilidade inter-analista
+> - Documentação completa do pipeline computacional
+> - Aprovação pelo responsável técnico do laboratório
+> - Conformidade com normas ISO 17025 e diretrizes SWGDAM/ENFSI
+
+```{r session-info}
+sessionInfo()
+```

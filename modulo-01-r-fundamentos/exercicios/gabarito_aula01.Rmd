@@ -1,0 +1,260 @@
+---
+title: "Gabarito - Exercícios da Aula 01"
+subtitle: "Módulo 01 - Fundamentos de R para Bioinformática"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Exercício 1: Vetores de DNA
+
+### Enunciado
+Crie um vetor com as frequências alélicas do marcador TH01 em uma população brasileira e responda:
+a) Qual alelo é mais frequente?
+b) Qual a soma total das frequências? Está correto?
+c) Calcule a heterozigosidade esperada: He = 1 - Σ(pi²)
+
+### Solução
+
+```{r exercicio1}
+# Frequências dos alelos TH01 (dados simulados baseados em literatura)
+freq_th01 <- c(
+  "6" = 0.23, "7" = 0.19, "8" = 0.08, "9" = 0.11,
+  "9.3" = 0.32, "10" = 0.05, "11" = 0.02
+)
+
+# a) Qual alelo é mais frequente?
+alelo_mais_frequente <- names(freq_th01)[which.max(freq_th01)]
+frequencia_maxima <- max(freq_th01)
+
+cat("a) O alelo mais frequente é:", alelo_mais_frequente,
+    "com frequência de", frequencia_maxima, "\n")
+
+# b) Soma total das frequências
+soma_freq <- sum(freq_th01)
+cat("b) Soma das frequências:", soma_freq, "\n")
+cat("   Está correto?", ifelse(abs(soma_freq - 1.0) < 0.01, "Sim", "Não"), "\n")
+
+# c) Heterozigosidade esperada: He = 1 - Σ(pi²)
+soma_quadrados <- sum(freq_th01^2)
+heterozigosidade_esperada <- 1 - soma_quadrados
+
+cat("c) Soma dos quadrados das frequências:", round(soma_quadrados, 4), "\n")
+cat("   Heterozigosidade esperada (He):", round(heterozigosidade_esperada, 4), "\n")
+cat("   Interpretação: He próximo de 1 indica alta diversidade genética\n")
+```
+
+### Explicação
+- **Heterozigosidade esperada (He)** mede a diversidade genética de um marcador
+- Valores próximos de 1 indicam marcadores altamente informativos para identificação forense
+- O marcador TH01 tem He ≈ 0.77, considerado bom para análises forenses
+- Em forense, painéis de STRs usam múltiplos marcadores com He alto para maximizar o poder discriminatório
+
+---
+
+## Exercício 2: Data Frame de Amostras
+
+### Enunciado
+Crie um data frame com 10 amostras forenses fictícias contendo: ID, tipo de amostra, concentração de DNA, e status de degradação. Depois:
+a) Filtre apenas amostras não degradadas
+b) Calcule a concentração média de DNA
+c) Adicione uma coluna com classificação de qualidade baseada na concentração
+
+### Solução
+
+```{r exercicio2}
+# Carregar dataset fornecido
+amostras <- read.csv("../datasets/amostras_forenses_aula01.csv",
+                     stringsAsFactors = FALSE)
+
+# Visualizar dados
+head(amostras)
+str(amostras)
+
+# a) Filtrar amostras não degradadas
+amostras_nao_degradadas <- amostras[amostras$degradado == FALSE, ]
+
+cat("a) Amostras não degradadas:\n")
+print(amostras_nao_degradadas[, c("id", "tipo", "dna_concentracao_ng_ul")])
+cat("   Total:", nrow(amostras_nao_degradadas), "amostras\n\n")
+
+# b) Concentração média de DNA
+conc_media_todas <- mean(amostras$dna_concentracao_ng_ul)
+conc_media_nao_deg <- mean(amostras_nao_degradadas$dna_concentracao_ng_ul)
+
+cat("b) Concentração média (todas):", round(conc_media_todas, 2), "ng/µL\n")
+cat("   Concentração média (não degradadas):", round(conc_media_nao_deg, 2), "ng/µL\n\n")
+
+# c) Classificação de qualidade baseada na concentração
+# Critérios comuns em laboratórios forenses:
+# Alta: ≥ 20 ng/µL | Média: 5-20 ng/µL | Baixa: < 5 ng/µL
+amostras$classificacao_qualidade <- ifelse(
+  amostras$dna_concentracao_ng_ul >= 20, "Alta",
+  ifelse(amostras$dna_concentracao_ng_ul >= 5, "Média", "Baixa")
+)
+
+cat("c) Data frame com classificação de qualidade:\n")
+print(amostras[, c("id", "tipo", "dna_concentracao_ng_ul", "classificacao_qualidade")])
+
+# Resumo por categoria de qualidade
+cat("\nResumo por qualidade:\n")
+print(table(amostras$classificacao_qualidade))
+```
+
+### Explicação
+- Em laboratórios forenses, a concentração de DNA determina a estratégia de análise
+- Amostras com **baixa concentração (< 5 ng/µL)** podem requerer amplificação adicional ou técnicas sensíveis
+- Amostras **degradadas** apresentam desafios adicionais e podem necessitar de mini-STRs ou SNPs
+- A classificação ajuda a priorizar amostras e planejar fluxos de trabalho
+
+---
+
+## Exercício 3: Lista de Perfil Genético
+
+### Enunciado
+Crie uma lista representando um perfil genético completo com 4 marcadores STR. Inclua metadados como data, analista e observações. Explore a estrutura com `str()`.
+
+### Solução
+
+```{r exercicio3}
+# Criar lista de perfil genético forense
+perfil_genetico <- list(
+  # Metadados da amostra
+  informacoes_amostra = list(
+    id_caso = "CASO_2026_0142",
+    id_amostra = "AM-2026-0142-A",
+    tipo_amostra = "sangue_periferico",
+    data_coleta = as.Date("2026-10-15"),
+    coletor = "Perito M. Santos",
+    local_coleta = "Laboratório de Criminalística - SP"
+  ),
+
+  # Dados do perfil genético
+  perfil_str = list(
+    kit_utilizado = "Identifiler Plus",
+    plataforma = "ABI 3500 Genetic Analyzer",
+    marcadores = list(
+      D3S1358 = list(alelos = c(15, 17), rfus = c(2845, 2156)),
+      vWA = list(alelos = c(14, 18), rfus = c(3201, 2890)),
+      FGA = list(alelos = c(22, 24), rfus = c(4102, 3567)),
+      D8S1179 = list(alelos = c(13, 15), rfus = c(2567, 2234)),
+      D21S11 = list(alelos = c(28, 30), rfus = c(3890, 3456)),
+      D18S51 = list(alelos = c(14, 16), rfus = c(2678, 2345)),
+      D5S818 = list(alelos = c(11, 12), rfus = c(3012, 2789)),
+      D13S317 = list(alelos = c(11, 12), rfus = c(2890, 2567)),
+      D7S820 = list(alelos = c(10, 11), rfus = c(2456, 2123)),
+      D16S539 = list(alelos = c(11, 12), rfus = c(2678, 2345)),
+      CSF1PO = list(alelos = c(10, 12), rfus = c(2345, 2012)),
+      TPOX = list(alelos = c(8, 8), rfus = c(3456, 0)),
+      D2S1338 = list(alelos = c(19, 23), rfus = c(2890, 2567)),
+      D19S433 = list(alelos = c(14, 15), rfus = c(2678, 2345)),
+      TH01 = list(alelos = c(7, 9.3), rfus = c(3012, 2789)),
+      Amelogenina = list(alelos = c("X", "Y"), rfus = c(2890, 2456))
+    )
+  ),
+
+  # Controle de qualidade
+  qc = list(
+    dna_quantidade_ng = 1.5,
+    ratio_260_280 = 1.82,
+    controle_positivo = "OK",
+    controle_negativo = "OK",
+    ladder_alelico = "OK",
+    pico_minimo_rfu = 150,
+    threshold_analitico_rfu = 50
+  ),
+
+  # Informações do analista
+  analise = list(
+    analista_responsavel = "Dra. Ana Silva",
+    data_analise = as.Date("2026-10-20"),
+    software_analise = "GeneMapper ID-X v1.7",
+    validado_por = "Dr. Carlos Oliveira",
+    data_validacao = as.Date("2026-10-21"),
+    status = "validado"
+  ),
+
+  # Observações
+  observacoes = c(
+    "Perfil completo, todos os loci acima do threshold analítico",
+    "Sem sinais de mistura detectados",
+    "Allelic balance adequado em todos os loci",
+    "Amostra adequada para comparação e busca em banco de dados"
+  )
+)
+
+# Explorar estrutura
+cat("Estrutura completa do perfil genético:\n")
+str(perfil_genetico, max.level = 3)
+
+# Acessar informações específicas
+cat("\n--- Informações da Amostra ---\n")
+cat("ID Caso:", perfil_genetico$informacoes_amostra$id_caso, "\n")
+cat("Tipo:", perfil_genetico$informacoes_amostra$tipo_amostra, "\n")
+cat("Data coleta:", format(perfil_genetico$informacoes_amostra$data_coleta, "%d/%m/%Y"), "\n")
+
+cat("\n--- Perfil STR (primeiros 4 marcadores) ---\n")
+for (marcador in names(perfil_genetico$perfil_str$marcadores)[1:4]) {
+  dados <- perfil_genetico$perfil_str$marcadores[[marcador]]
+  cat(sprintf("%s: Alelos %s | RFUs: %s\n",
+              marcador,
+              paste(dados$alelos, collapse = "/"),
+              paste(dados$rfus, collapse = "/")))
+}
+
+cat("\n--- Controle de Qualidade ---\n")
+cat("DNA:", perfil_genetico$qc$dna_quantidade_ng, "ng\n")
+cat("Ratio 260/280:", perfil_genetico$qc$ratio_260_280, "\n")
+cat("Status QC:", ifelse(all(c(
+  perfil_genetico$qc$controle_positivo,
+  perfil_genetico$qc$controle_negativo,
+  perfil_genetico$qc$ladder_alelico
+) == "OK"), "APROVADO", "REPROVADO"), "\n")
+
+cat("\n--- Observações ---\n")
+for (obs in perfil_genetico$observacoes) {
+  cat("•", obs, "\n")
+}
+```
+
+### Explicação
+- Listas são ideais para representar **perfis genéticos complexos** com estruturas hierárquicas
+- Na prática forense, perfis seguem formatos padronizados (como XML do CODIS ou tabelas SWGDAM)
+- Metadados completos são essenciais para **cadeia de custódia digital** e auditoria
+- O campo `qc` documenta controles de qualidade obrigatórios em análises forenses acreditadas (ISO 17025)
+
+---
+
+## Conceitos-Chave Revisados
+
+| Conceito | Aplicação Forense |
+|----------|-------------------|
+| Vetores | Frequências alélicas, séries de RFUs |
+| Matrizes | Tabelas de alelos (amostras × marcadores) |
+| Listas | Perfis genéticos completos com metadados |
+| Data Frames | Registros de amostras, resultados de análises |
+| NA/NULL | Dados ausentes em perfis parciais |
+| Indexação | Selecionar marcadores específicos, filtrar amostras |
+
+---
+
+## Próximos Passos
+
+Na próxima aula, você aprenderá:
+- Manipulação elegante de dados com **dplyr** (`filter`, `select`, `mutate`, `summarise`)
+- Transformação de dados com **tidyr** (`pivot_longer`, `pivot_wider`)
+- Pipe operator (`%>%` ou `|>`) para encadeamento de operações
+- Aplicações práticas com datasets forenses reais (simulados)
+
+```{r session-info}
+sessionInfo()
+```

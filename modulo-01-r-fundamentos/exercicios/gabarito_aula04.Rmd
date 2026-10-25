@@ -1,0 +1,207 @@
+---
+title: "Gabarito - Exercícios da Aula 04"
+subtitle: "Módulo 01 - Visualização Avançada de Dados Genômicos"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+```
+
+## Exercício 1: Eletroferograma Personalizado
+
+### Enunciado
+Modifique a função `simular_eletroferograma()` para:
+a) Aceitar um parâmetro de degradação que reduz a altura dos picos proporcionalmente ao tamanho
+b) Adicionar artefatos de stutter (picos menores ±1 repetição)
+c) Plotar o resultado com anotações de qualidade
+
+### Solução
+
+```{r exercicio1}
+# Função modificada com degradação e stutter
+simular_eletroferograma_avancado <- function(
+    marcadores = c("D3S1358", "TH01", "D21S11"),
+    alelos_por_marcador = list(
+      D3S1358 = c(15, 17), TH01 = c(7, 9.3), D21S11 = c(28, 30)
+    ),
+    rfu_base = 3000,
+    ruido_max = 150,
+    taxa_degradacao = 0.02,   # Redução % por bp acima de referência
+    tamanho_referencia_bp = 100,
+    taxa_stutter = 0.10       # Stutter = 10% do pico principal
+) {
+  dados <- tibble()
+
+  for (marcador in marcadores) {
+    alelos <- alelos_por_marcador[[marcador]]
+
+    for (alelo in alelos) {
+      centro <- as.numeric(alelo)
+      # Simular tamanho em bp (aproximação: alelo * 4 + offset)
+      tamanho_bp_real <- centro * 4 + 50
+
+      # a) Efeito de degradação exponencial
+      fator_degradacao <- exp(-taxa_degradacao *
+                                max(0, tamanho_bp_real - tamanho_referencia_bp))
+      altura_efetiva <- rnorm(1, mean = rfu_base * fator_degradacao,
+                              sd = rfu_base * 0.1)
+
+      largura <- 0.3
+      x_vals <- seq(centro - 1.5, centro + 1.5, by = 0.05)
+      y_vals <- altura_efetiva * exp(-((x_vals - centro)^2) / (2 * largura^2))
+
+      pico <- tibble(
+        tamanho_bp = x_vals, rfu = y_vals,
+        marcador = marcador, alelo = as.character(alelo),
+        tipo = "pico_alelico"
+      )
+      dados <- bind_rows(dados, pico)
+
+      # b) Adicionar stutter (-1 repetição)
+      if (taxa_stutter > 0) {
+        centro_stutter <- centro - 1
+        altura_stutter <- altura_efetiva * taxa_stutter
+        y_stutter <- altura_stutter * exp(-((x_vals - centro_stutter)^2) / (2 * largura^2))
+
+        stutter <- tibble(
+          tamanho_bp = x_vals, rfu = y_stutter,
+          marcador = marcador, alelo = paste0(as.character(alelo), "-stutter"),
+          tipo = "stutter"
+        )
+        dados <- bind_rows(dados, stutter)
+      }
+    }
+  }
+
+  # Ruído de fundo
+  ruido <- tibble(
+    tamanho_bp = seq(min(dados$tamanho_bp), max(dados$tamanho_bp), length.out = 300),
+    rfu = runif(300, 0, ruido_max),
+    marcador = NA_character_, alelo = NA_character_, tipo = "ruido"
+  )
+
+  return(bind_rows(dados, ruido))
+}
+
+# Gerar eletroferograma com degradação moderada
+set.seed(123)
+eletro_deg <- simular_eletroferograma_avancado(taxa_degradacao = 0.03)
+
+# c) Plotar com anotações de qualidade
+ggplot(eletro_deg |> filter(tipo != "ruido"),
+       aes(x = tamanho_bp, y = rfu, color = tipo)) +
+  geom_line(linewidth = 0.8) +
+  scale_color_manual(values = c("pico_alelico" = "#2E86AB", "stutter" = "#E94F37")) +
+  facet_wrap(~marcador, scales = "free_x", ncol = 1) +
+  geom_hline(yintercept = 150, linetype = "dashed", color = "gray50") +
+  labs(
+    title = "Eletroferograma com Efeitos de Degradação e Stutter",
+    subtitle = "Note a redução de RFU em alelos maiores e picos stutter (-1 rep)",
+    x = "Tamanho (bp)", y = "RFU", color = "Tipo de Pico"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+### Explicação
+- **Degradação**: DNA degradado apresenta perda exponencial de sinal em fragmentos maiores; modelamos isso com `exp(-taxa * delta_bp)`
+- **Stutter**: Artefato de PCR onde uma repetição é perdida durante amplificação; tipicamente 5-15% do pico principal
+- Em análises forenses reais, thresholds de stutter são validados por kit e devem ser documentados nos SOPs do laboratório
+
+---
+
+## Exercício 2: Dashboard Comparativo
+
+### Enunciado
+Crie uma figura composta usando `patchwork` com heatmap, boxplot e tabela resumo.
+
+### Solução
+
+```{r exercicio2, eval=FALSE}
+library(patchwork)
+
+# Preparar dados
+set.seed(42)
+perfis <- matrix(sample(10:20, 48, replace = TRUE), nrow = 8)
+rownames(perfis) <- paste0("AM", sprintf("%03d", 1:8))
+colnames(perfis) <- paste0(rep(c("D3S1358","TH01","D21S11","D18S51","vWA","FGA"), each = 2),
+                            rep(c(".1",".2"), 6))
+
+# a) Heatmap
+heatmap_data <- as_tibble(perfis, rownames = "amostra") |>
+  pivot_longer(-amostra, names_to = "locus", values_to = "alelo") |>
+  separate(locus, into = c("marcador", "n"), sep = "\\.")
+
+p_heatmap <- ggplot(heatmap_data, aes(x = marcador, y = amostra, fill = alelo)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "#2E86AB", mid = "white", high = "#E94F37", midpoint = 15) +
+  labs(title = "Perfis STR", x = NULL, y = NULL) +
+  theme_minimal(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# b) Boxplot de heterozigosidade simulada
+het_data <- tibble(
+  marcador = rep(c("D3S1358","TH01","D21S11","D18S51","vWA","FGA"), each = 20),
+  He = c(rnorm(20, 0.78, 0.05), rnorm(20, 0.72, 0.06),
+         rnorm(20, 0.85, 0.04), rnorm(20, 0.80, 0.05),
+         rnorm(20, 0.76, 0.05), rnorm(20, 0.82, 0.04))
+)
+
+p_boxplot <- ggplot(het_data, aes(x = marcador, y = He, fill = marcador)) +
+  geom_boxplot(alpha = 0.8) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Heterozigosidade Esperada", x = NULL, y = "He") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+
+# c) Tabela resumo como gráfico
+resumo <- het_data |>
+  group_by(marcador) |>
+  summarise(He_medio = round(mean(He), 3), .groups = "drop")
+
+p_tabela <- ggplot(resumo, aes(x = marcador, y = 1, label = He_medio)) +
+  geom_text(size = 3.5) +
+  labs(title = "He Médio por Marcador") +
+  theme_void(base_size = 9) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+# Composição final
+layout_design <- "
+  AAAAAA
+  BBBBCC
+"
+
+p_heatmap + p_boxplot + p_tabela +
+  plot_layout(design = layout_design) +
+  plot_annotation(
+    title = "Dashboard Forense Comparativo",
+    subtitle = "Análise integrada de perfis STR e diversidade genética",
+    theme = theme(plot.title = element_text(face = "bold", size = 14))
+  )
+```
+
+---
+
+## Conceitos-Chave Revisados
+
+| Técnica | Aplicação Forense |
+|---------|-------------------|
+| Simulação de picos gaussianos | Modelagem de eletroferogramas |
+| `facet_wrap()` | Separar canais/marcadores |
+| `geom_tile()` | Heatmaps comparativos |
+| Temas customizados | Padronização de laudos |
+| `ggsave()` dpi=300 | Qualidade para documentos legais |
+| `patchwork` | Relatórios visuais integrados |
+
+```{r session-info}
+sessionInfo()
+```

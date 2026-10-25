@@ -1,0 +1,479 @@
+---
+title: "Aula 01: Introdução ao R para Bioinformática"
+subtitle: "Módulo 01 - Fundamentos de R para Bioinformática"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## 🎯 Objetivos da Aula
+
+Ao final desta aula, você será capaz de:
+
+1. Compreender o que é o R e sua importância na bioinformática
+2. Instalar e configurar o ambiente R + RStudio
+3. Executar operações básicas no console do R
+4. Entender os tipos de dados fundamentais do R
+5. Criar e manipular vetores, matrizes e data frames
+6. Importar e exportar dados biológicos simples
+
+---
+
+## 1. O que é o R?
+
+### 1.1 Uma Breve História
+
+O R é uma linguagem de programação e ambiente computacional desenvolvida especificamente para **análise estatística e visualização de dados**. Criada em 1993 por Ross Ihaka e Robert Gentleman na Universidade de Auckland (Nova Zelândia), o R é hoje mantido pela *R Core Team* e pela *R Foundation for Statistical Computing*.
+
+### 1.2 Por que R na Bioinformática?
+
+O R se tornou a linguagem dominante em bioinformática por várias razões:
+
+- **Bioconductor**: repositório com mais de 2.000 pacotes especializados em análise de dados genômicos
+- **Análise estatística robusta**: testes, modelos lineares, análises multivariadas
+- **Visualização poderosa**: ggplot2 e outros pacotes criam gráficos de qualidade para publicação
+- **Reprodutibilidade**: scripts documentados garantem que análises possam ser replicadas
+- **Comunidade ativa**: milhares de pesquisadores contribuem e compartilham métodos
+- **Gratuito e open-source**: acessível a qualquer laboratório ou instituição
+
+### 1.3 Aplicações Forenses do R
+
+Na bioinformática forense, o R é utilizado para:
+
+| Aplicação | Pacotes Relevantes |
+|-----------|-------------------|
+| Análise de perfis STR | `forensicTools`, `DNAtools` |
+| Cálculo de likelihood ratios | `DNAmixtures`, `EuroForMix` |
+| Genética de populações | `adegenet`, `hierfstat` |
+| Análise de expressão gênica | `DESeq2`, `edgeR` |
+| Metabolômica forense | `xcms`, `CAMERA` |
+| Visualização de dados forenses | `ggplot2`, `pheatmap` |
+
+---
+
+## 2. Configurando o Ambiente
+
+### 2.1 Instalando o R
+
+1. Acesse [https://cran.r-project.org/](https://cran.r-project.org/)
+2. Selecione seu sistema operacional (Windows, macOS ou Linux)
+3. Baixe e instale a versão mais recente (≥ 4.3.0 recomendado)
+
+### 2.2 Instalando o RStudio
+
+O RStudio é um IDE (Ambiente de Desenvolvimento Integrado) que facilita muito o trabalho com R:
+
+1. Acesse [https://posit.co/download/rstudio-desktop/](https://posit.co/download/rstudio-desktop/)
+2. Baixe a versão gratuita do RStudio Desktop
+3. Instale após ter instalado o R
+
+### 2.3 A Interface do RStudio
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Editor de Scripts          │  Environment / History     │
+│  (onde você escreve código) │  (objetos e histórico)     │
+│                             │                            │
+├─────────────────────────────┼────────────────────────────┤
+│  Console                    │  Files / Plots / Packages  │
+│  (execução interativa)      │  (arquivos e visualizações)│
+└─────────────────────────────────────────────────────────┘
+```
+
+### 2.4 Seu Primeiro Script
+
+Crie um novo script (`File > New File > R Script`) e salve como `primeiro_script.R`:
+
+```r
+# Meu primeiro script em R
+# Autor: Seu Nome
+# Data: 2026-10-25
+
+# Imprimir uma mensagem
+print("Olá, Bioinformática Forense!")
+
+# Calcular algo simples
+resultado <- 2 + 2
+cat("O resultado é:", resultado, "\n")
+```
+
+> 💡 **Dica:** Use `Ctrl + Enter` para executar a linha atual ou seleção no console.
+
+---
+
+## 3. Tipos de Dados Fundamentais
+
+### 3.1 Tipos Atômicos
+
+O R possui cinco tipos atômicos básicos:
+
+```r
+# Lógico (booleano)
+logico <- TRUE
+class(logico)  # "logical"
+
+# Numérico (inteiro e decimal)
+inteiro <- 42L       # L indica inteiro explicitamente
+decimal <- 3.14159
+class(inteiro)       # "integer"
+class(decimal)       # "numeric"
+
+# Caractere (texto/string)
+texto <- "DNA forense"
+class(texto)         # "character"
+
+# Complexo (menos comum em bioinformática)
+complexo <- 3 + 2i
+class(complexo)      # "complex"
+
+# Raw (dados binários - útil para sequências)
+raw_data <- charToRaw("ATCG")
+class(raw_data)      # "raw"
+```
+
+### 3.2 Verificando e Convertendo Tipos
+
+```r
+x <- "123"
+is.character(x)      # TRUE
+is.numeric(x)        # FALSE
+
+# Conversão explícita
+y <- as.numeric(x)   # 123
+z <- as.character(y) # "123"
+
+# Cuidado com conversões impossíveis!
+w <- as.numeric("abc")  # NA (Not Available) com aviso
+```
+
+### 3.3 Valores Especiais
+
+```r
+# NA - Valor ausente (Not Available)
+dado_faltante <- NA
+is.na(dado_faltante)  # TRUE
+
+# NULL - Ausência de valor
+vazio <- NULL
+is.null(vazio)        # TRUE
+length(NULL)          # 0
+
+# NaN - Not a Number (resultado indefinido)
+indefinido <- 0/0     # NaN
+is.nan(indefinido)    # TRUE
+
+# Inf e -Inf - Infinito
+inf_positivo <- 1/0   # Inf
+inf_negativo <- -1/0  # -Inf
+is.infinite(inf_positivo)  # TRUE
+```
+
+---
+
+## 4. Estruturas de Dados
+
+### 4.1 Vetores
+
+Vetores são a estrutura mais básica do R. Todos os elementos devem ser do **mesmo tipo**.
+
+```r
+# Criando vetores
+bases_dna <- c("A", "T", "C", "G")
+pesos_moleculares <- c(313.2, 304.2, 289.2, 329.2)  # g/mol
+marcadores_str <- c("D3S1358", "TH01", "D21S11", "D18S51")
+
+# Sequências numéricas
+alelos <- 1:20           # 1, 2, 3, ..., 20
+frequencias <- seq(0, 1, by = 0.1)  # 0.0, 0.1, ..., 1.0
+
+# Repetição
+genotipo <- rep(c("A", "B"), times = 3)  # "A" "B" "A" "B" "A" "B"
+replicatas <- rep("amostra_01", each = 3) # "amostra_01" x3
+
+# Acessando elementos (indexação começa em 1!)
+bases_dna[1]        # "A"
+bases_dna[c(1,3)]   # "A" "C"
+bases_dna[-2]       # Tudo exceto "T"
+bases_dna[bases_dna != "G"]  # "A" "T" "C"
+
+# Operações vetorizadas
+log_pesos <- log(pesos_moleculares)
+pesos_normalizados <- pesos_moleculares / sum(pesos_moleculares)
+
+# Funções úteis sobre vetores
+length(bases_dna)     # 4
+sum(pesos_moleculares) # 1235.8
+mean(pesos_moleculares) # 308.95
+sd(pesos_moleculares)  # desvio padrão
+sort(pesos_moleculares) # ordenar
+unique(genotipo)       # valores únicos
+table(genotipo)        # contagem
+```
+
+#### ⚠️ Reciclagem de Vetores
+
+Quando vetores de tamanhos diferentes são combinados, o R **recicla** o menor:
+
+```r
+# Cuidado! Isso pode causar erros silenciosos
+curto <- c(1, 2)
+longo <- c(10, 20, 30, 40, 50)
+curto + longo  # 11, 22, 31, 42, 51 — reciclou c(1,2)!
+
+# Melhor prática: sempre verifique comprimentos
+stopifnot(length(curto) == length(longo))
+```
+
+### 4.2 Matrizes
+
+Matrizes são vetores bidimensionais com elementos do **mesmo tipo**.
+
+```r
+# Criando matriz de alelos (exemplo forense)
+# Linhas = amostras, Colunas = marcadores
+matriz_alelos <- matrix(
+  c(15, 16, 7, 9, 28, 30, 14, 17,
+    14, 18, 6, 9, 29, 31, 13, 16,
+    15, 17, 8, 8, 28, 28, 15, 15),
+  nrow = 3,
+  ncol = 8,
+  byrow = TRUE
+)
+
+rownames(matriz_alelos) <- c("Amostra_A", "Amostra_B", "Amostra_C")
+colnames(matriz_alelos) <- c("D3S1358_1", "D3S1358_2",
+                              "TH01_1", "TH01_2",
+                              "D21S11_1", "D21S11_2",
+                              "D18S51_1", "D18S51_2")
+
+print(matriz_alelos)
+
+# Acessando elementos
+matriz_alelos[1, ]      # Primeira linha (Amostra_A completa)
+matriz_alelos[, 1:2]    # Primeira coluna par (D3S1358)
+matriz_alelos["Amostra_B", "TH01_1"]  # Valor específico
+
+# Dimensões
+dim(matriz_alelos)      # 3 8
+nrow(matriz_alelos)     # 3
+ncol(matriz_alelos)     # 8
+
+# Transposta
+t(matriz_alelos)
+
+# Operações matriciais
+colMeans(matriz_alelos)  # Média de cada marcador
+rowSums(matriz_alelos)   # Soma por amostra
+```
+
+### 4.3 Listas
+
+Listas podem conter elementos de **tipos diferentes** e até outras listas. São essenciais em bioinformática.
+
+```r
+# Lista representando um perfil genético forense
+perfil_genetico <- list(
+  id_amostra = "CASO_2026_001",
+  data_coleta = as.Date("2026-10-20"),
+  marcadores = c("D3S1358", "TH01", "D21S11", "D18S51"),
+  alelos = list(
+    D3S1358 = c(15, 16),
+    TH01 = c(7, 9),
+    D21S11 = c(28, 30),
+    D18S51 = c(14, 17)
+  ),
+  analista = "Dr. Silva",
+  validado = TRUE,
+  notas = "Amostra de sangue periférico, extração orgânica"
+)
+
+# Acessando elementos
+perfil_genetico$id_amostra          # "CASO_2026_001"
+perfil_genetico[["data_coleta"]]    # Date object
+perfil_genetico$alelos$TH01         # c(7, 9)
+perfil_genetico[[4]]                # Quarto elemento (lista de alelos)
+
+# Verificar estrutura
+str(perfil_genetico)
+names(perfil_genetico)
+length(perfil_genetico)
+
+# Modificar elementos
+perfil_genetico$validado <- FALSE
+perfil_genetico$novo_campo <- "valor adicional"
+```
+
+### 4.4 Data Frames
+
+Data frames são a estrutura mais usada para dados tabulares em bioinformática. Cada coluna pode ter um tipo diferente.
+
+```r
+# Criando data frame de amostras forenses
+amostras_forenses <- data.frame(
+  id = c("AM001", "AM002", "AM003", "AM004", "AM005"),
+  tipo = c("sangue", "saliva", "tecido", "sangue", "osso"),
+  dna_concentracao_ng_ul = c(25.4, 18.7, 42.1, 8.3, 3.2),
+  ratio_260_280 = c(1.82, 1.79, 1.85, 1.65, 1.45),
+  degradado = c(FALSE, FALSE, FALSE, TRUE, TRUE),
+  data_analise = as.Date(c("2026-10-01", "2026-10-02",
+                           "2026-10-03", "2026-10-04", "2026-10-05")),
+  stringsAsFactors = FALSE  # IMPORTANTE: evita conversão automática para factor
+)
+
+# Explorando o data frame
+head(amostras_forenses)       # Primeiras 6 linhas
+tail(amostras_forenses, 3)    # Últimas 3 linhas
+str(amostras_forenses)        # Estrutura
+summary(amostras_forenses)    # Resumo estatístico
+dim(amostras_forenses)        # 5 linhas, 6 colunas
+names(amostras_forenses)      # Nomes das colunas
+
+# Selecionando colunas
+amostras_forenses$id                          # Uma coluna (vetor)
+amostras_forenses[, c("id", "tipo")]          # Múltiplas colunas
+amostras_forenses$dna_concentracao_ng_ul      # Notação $
+
+# Filtrando linhas
+amostras_sangue <- amostras_forenses[amostras_forenses$tipo == "sangue", ]
+amostras_boa_qualidade <- amostras_forenses[amostras_forenses$ratio_260_280 >= 1.7, ]
+amostras_degradadas <- amostras_forenses[amostras_forenses$degradado == TRUE, ]
+
+# Filtros combinados
+amostras_criticas <- amostras_forenses[
+  amostras_forenses$dna_concentracao_ng_ul < 10 &
+  amostras_forenses$degradado == TRUE,
+]
+
+# Adicionando novas colunas
+amostras_forenses$qualidade <- ifelse(
+  amostras_forenses$ratio_260_280 >= 1.8, "Alta",
+  ifelse(amostras_forenses$ratio_260_280 >= 1.6, "Média", "Baixa")
+)
+
+# Ordenar
+ordenado_por_conc <- amostras_forenses[order(amostras_forenses$dna_concentracao_ng_ul), ]
+ordenado_decrescente <- amostras_forenses[order(-amostras_forenses$dna_concentracao_ng_ul), ]
+```
+
+---
+
+## 5. Importando e Exportando Dados
+
+### 5.1 Leitura de Arquivos CSV
+
+```r
+# Ler arquivo CSV
+dados <- read.csv("dados_forenses.csv",
+                  header = TRUE,
+                  sep = ",",
+                  stringsAsFactors = FALSE,
+                  encoding = "UTF-8")
+
+# Opções comuns para diferentes formatos
+dados_tab <- read.table("dados.txt", header = TRUE, sep = "\t")
+dados_eu <- read.csv2("dados_europeu.csv")  # separador ; e vírgula decimal
+
+# Verificar após leitura
+head(dados)
+str(dados)
+summary(dados)
+```
+
+### 5.2 Escrita de Arquivos
+
+```r
+# Salvar como CSV
+write.csv(amostras_forenses, "saida_amostras.csv", row.names = FALSE)
+
+# Salvar como TSV (tab-separated)
+write.table(amostras_forenses, "saida_amostras.tsv",
+            sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+### 5.3 Salvando Objetos R
+
+```r
+# Salvar objetos específicos
+save(perfil_genetico, amostras_forenses, file = "dados_curso.RData")
+
+# Carregar depois
+load("dados_curso.RData")
+
+# Salvar um único objeto
+saveRDS(perfil_genetico, "perfil_genetico.rds")
+perfil_carregado <- readRDS("perfil_genetico.rds")
+```
+
+---
+
+## 6. Exercícios Práticos
+
+### Exercício 1: Vetores de DNA
+
+Crie um vetor com as frequências alélicas do marcador TH01 em uma população brasileira:
+
+```r
+# Frequências dos alelos TH01 (dados simulados baseados em literatura)
+freq_th01 <- c(
+  "6" = 0.23, "7" = 0.19, "8" = 0.08, "9" = 0.11,
+  "9.3" = 0.32, "10" = 0.05, "11" = 0.02
+)
+```
+
+a) Qual alelo é mais frequente?
+b) Qual a soma total das frequências? Está correto?
+c) Calcule a heterozigosidade esperada: He = 1 - Σ(pi²)
+
+### Exercício 2: Data Frame de Amostras
+
+Crie um data frame com 10 amostras forenses fictícias contendo: ID, tipo de amostra, concentração de DNA, e status de degradação. Depois:
+
+a) Filtre apenas amostras não degradadas
+b) Calcule a concentração média de DNA
+c) Adicione uma coluna com classificação de qualidade baseada na concentração
+
+### Exercício 3: Lista de Perfil Genético
+
+Crie uma lista representando um perfil genético completo com 4 marcadores STR. Inclua metadados como data, analista e observações. Explore a estrutura com `str()`.
+
+---
+
+## 7. Próximos Passos
+
+Na próxima aula, vamos aprender sobre:
+
+- **Pacotes do tidyverse**: dplyr para manipulação elegante de dados
+- **Pipe operator** (`%>%` ou `|>`): encadeamento de operações
+- **tidyr**: transformação de dados longos e largos
+- **Aplicações práticas** com dados forenses reais (simulados)
+
+### Recursos Recomendados
+
+- [R for Data Science](https://r4ds.hadley.nz/) - Hadley Wickham (gratuito online)
+- [Bioconductor](https://www.bioconductor.org/) - Pacotes de bioinformática
+- [SWGDAM Guidelines](https://www.swgdam.org/) - Diretrizes forenses
+- Documentação oficial: `?funcao` ou `help(funcao)` no console
+
+---
+
+## 📝 Notas Importantes
+
+> ⚖️ **Ética Forense**: Todos os dados utilizados neste curso são **simulados** para fins educacionais. Em análises forenses reais, siga sempre os protocolos institucionais, normas técnicas (ISO 17025, SWGDAM) e requisitos legais de sua jurisdição.
+
+> 🔬 **Reprodutibilidade**: Sempre documente suas análises com scripts comentados, versões de pacotes (`sessionInfo()`) e dados de entrada. A reprodutibilidade é fundamental na ciência forense.
+
+---
+
+```{r session-info}
+sessionInfo()
+```

@@ -1,0 +1,581 @@
+---
+title: "Aula 03: Bioconductor e Pacotes Especializados"
+subtitle: "Módulo 01 - Fundamentos de R para Bioinformática"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## 🎯 Objetivos da Aula
+
+Ao final desta aula, você será capaz de:
+
+1. Compreender o ecossistema **Bioconductor** e sua importância na bioinformática
+2. Instalar e gerenciar pacotes do Bioconductor
+3. Utilizar classes de dados especializadas (`DNAStringSet`, `GRanges`, `VCF`)
+4. Manipular sequências biológicas com **Biostrings**
+5. Trabalhar com anotações genômicas usando **GenomicRanges**
+6. Conhecer pacotes R específicos para **análise forense**
+7. Importar/exportar formatos bioinformáticos padrão (FASTA, VCF, GFF)
+
+---
+
+## 1. O que é o Bioconductor?
+
+### 1.1 Visão Geral
+
+O **Bioconductor** é um repositório de pacotes R dedicado à análise de dados genômicos e biológicos de alto rendimento. Fundado em 2001 por Robert Gentleman e Ross Ihaka, hoje conta com mais de **2.200 pacotes** ativos.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    BIOCONDUCTOR                              │
+├─────────────────────────────────────────────────────────────┤
+│  Genômica      │ Transcriptômica  │ Proteômica   │ Forense  │
+│  Biostrings    │ DESeq2           │ MSnbase      │ forensic │
+│  GenomicRanges │ edgeR            │ xcms         │ Tools    │
+│  BSgenome      │ limma            │ CAMERA       │ DNAtools │
+│  VariantAnnot. │ SingleCellExp.   │ MetaboCore   │ adegenet │
+├─────────────────────────────────────────────────────────────┤
+│              Classes de Dados S4 Especializadas              │
+│         DNAStringSet | GRanges | VCF | SummarizedExperiment │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 Por que Bioconductor na Bioinformática Forense?
+
+| Recurso | Aplicação Forense |
+|---------|-------------------|
+| Classes S4 robustas | Representação padronizada de perfis genéticos |
+| Anotação genômica | Mapeamento de STRs/SNPs no genoma de referência |
+| Manipulação de sequências | Extração de regiões, alinhamentos, busca de motivos |
+| Análise de variantes | Processamento de dados NGS forenses |
+| Metabolômica | Identificação de substâncias em toxicologia |
+| Reprodutibilidade | Workflows documentados e versionados |
+
+### 1.3 Diferença CRAN vs Bioconductor
+
+```r
+# Pacotes CRAN: install.packages()
+install.packages("tidyverse")
+
+# Pacotes Bioconductor: BiocManager::install()
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("Biostrings")
+```
+
+---
+
+## 2. Instalando e Gerenciando Pacotes Bioconductor
+
+### 2.1 Configuração Inicial
+
+```{r bioc-setup, eval=FALSE}
+# Instalar BiocManager (se ainda não tiver)
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# Verificar versão do Bioconductor
+BiocManager::version()
+
+# Instalar pacotes essenciais para bioinformática forense
+BiocManager::install(c(
+  "Biostrings",      # Manipulação de sequências
+  "GenomicRanges",   # Anotações genômicas
+  "BSgenome.Hsapiens.UCSC.hg38",  # Genoma humano de referência
+  "VariantAnnotation", # Anotação de variantes (SNPs/STRs)
+  "xcms",            # Metabolômica / toxicologia
+  "CAMERA"           # Anotação de metabólitos
+))
+
+# Pacotes forenses específicos (CRAN + GitHub)
+install.packages(c("adegenet", "hierfstat", "pegas"))
+# forensicTools e DNAtools podem exigir instalação via GitHub
+# devtools::install_github("username/forensicTools")
+```
+
+### 2.2 Verificando Instalações
+
+```{r check-packages, eval=FALSE}
+# Verificar se pacotes estão instalados
+pacotes_necessarios <- c("Biostrings", "GenomicRanges", "adegenet")
+instalados <- sapply(pacotes_necessarios, requireNamespace, quietly = TRUE)
+cat("Status dos pacotes:\n")
+print(instalados)
+
+# Informações detalhadas sobre um pacote
+packageDescription("Biostrings")
+citation("Biostrings")
+```
+
+---
+
+## 3. Biostrings: Manipulação de Sequências Biológicas
+
+### 3.1 Classes de Sequências
+
+O pacote **Biostrings** fornece classes eficientes para representar sequências biológicas:
+
+```{r biostrings-classes, eval=FALSE}
+library(Biostrings)
+
+# DNAString: uma única sequência de DNA
+seq_dna <- DNAString("ATCGATCGATCGATCG")
+class(seq_dna)        # "DNAString"
+length(seq_dna)       # 16 bases
+alphabet(seq_dna)     # Alfabeto válido
+
+# DNAStringSet: conjunto de sequências (mais comum)
+sequencias <- DNAStringSet(c(
+  "ATCGATCGATCG",
+  "GCTAGCTAGCTA",
+  "TTTTAAAACCCC"
+))
+names(sequencias) <- c("Amostra_01", "Amostra_02", "Amostra_03")
+
+# RNAString e AAString para RNA e proteínas
+seq_rna <- RNAString("AUCGAUCGAUCG")
+seq_prot <- AAString("MADEEKLKK")
+```
+
+### 3.2 Operações com Sequências
+
+```{r biostrings-operations, eval=FALSE}
+library(Biostrings)
+
+# Criar sequência exemplo (região de STR TH01 simulada)
+str_th01 <- DNAString("TCATTCATTCATTCATTCAT")  # 5 repetições TCAT
+
+# Contagem de bases
+letterFrequency(str_th01, letters = c("A", "T", "C", "G"))
+
+# Composição nucleotídica
+alphabetFrequency(str_th01)
+
+# Conteúdo GC
+gc_content <- letterFrequency(str_th01, "GC", as.prob = TRUE)
+cat("Conteúdo GC:", round(gc_content * 100, 1), "%\n")
+
+# Complemento reverso (essencial para primers!)
+primer_fwd <- DNAString("AGCTTAGCTA")
+primer_rev <- reverseComplement(primer_fwd)
+cat("Primer FWD:", as.character(primer_fwd), "\n")
+cat("Primer REV:", as.character(primer_rev), "\n")
+
+# Transcrição e tradução
+dna_coding <- DNAString("ATGGCTAGCTAA")
+rna_transcrito <- transcribe(dna_coding)
+proteina <- translate(dna_coding)
+cat("DNA:", as.character(dna_coding), "\n")
+cat("RNA:", as.character(rna_transcrito), "\n")
+cat("Proteína:", as.character(proteina), "\n")
+```
+
+### 3.3 Busca de Motivos e Padrões
+
+```{r motif-search, eval=FALSE}
+library(Biostrings)
+
+# Sequência genômica simulada (região de interesse forense)
+regiao_genomica <- DNAString(
+  "AGCTTAGCTATCATTCATTCATTCATTCATTCATGCTAGCTAGCTA"
+)
+
+# Buscar motivo de STR (repetição TCAT)
+motivo_str <- DNAString("TCAT")
+matches <- vmatchPattern(motivo_str, regiao_genomica)
+cat("Encontradas", length(matches[[1]]), "ocorrências do motivo TCAT\n")
+cat("Posições:", start(matches[[1]]), "\n")
+
+# Buscar com mismatches (tolerância a mutações)
+matches_flex <- vmatchPattern(motivo_str, regiao_genomica, max.mismatch = 1)
+cat("Com até 1 mismatch:", length(matches_flex[[1]]), "ocorrências\n")
+
+# Expressões regulares em sequências
+# Buscar sítios de restrição (exemplo: EcoRI = GAATTC)
+sitio_ecori <- DNAString("GAATTC")
+ecori_hits <- vmatchPattern(sitio_ecori, regiao_genomica)
+cat("Sítios EcoRI encontrados:", length(ecori_hits[[1]]), "\n")
+```
+
+### 3.4 Leitura e Escrita de Arquivos FASTA
+
+```{r fasta-io, eval=FALSE}
+library(Biostrings)
+
+# Ler arquivo FASTA
+# seqs <- readDNAStringSet("sequencias_forenses.fasta")
+
+# Criar FASTA de exemplo programaticamente
+sequencias_exemplo <- DNAStringSet(c(
+  "ATCGATCGATCGATCGATCGATCGATCG",
+  "GCTAGCTAGCTAGCTAGCTAGCTAGCTA",
+  "AAAATTTTCCCCGGGGAAAATTTTCCCC"
+))
+names(sequencias_exemplo) <- c(
+  "CASO_001_AMOSTRA_A",
+  "CASO_001_AMOSTRA_B",
+  "CASO_002_REFERENCIA"
+)
+
+# Escrever arquivo FASTA
+writeXStringSet(sequencias_exemplo, filepath = "saida_sequencias.fasta")
+
+# Verificar conteúdo escrito
+cat(readLines("saida_sequencias.fasta"), sep = "\n")
+```
+
+---
+
+## 4. GenomicRanges: Anotações Genômicas
+
+### 4.1 Conceito de Intervalos Genômicos
+
+Em bioinformática forense, precisamos localizar marcadores (STRs, SNPs) no genoma de referência:
+
+```{r genomic-ranges-intro, eval=FALSE}
+library(GenomicRanges)
+
+# Definir posições de marcadores STR no genoma hg38
+marcadores_str <- GRanges(
+  seqnames = c("chr3", "chr11", "chr21", "chr18", "chr12"),
+  ranges = IRanges(
+    start = c(45540627, 2159913, 19181912, 63281520, 124895197),
+    end   = c(45540750, 2159990, 19182050, 63281680, 124895350)
+  ),
+  strand = c("+", "+", "-", "+", "+"),
+  marcador = c("D3S1358", "TH01", "D21S11", "D18S51", "vWA"),
+  tipo = rep("STR", 5),
+  num_alelos_conhecidos = c(18, 12, 35, 22, 15)
+)
+
+cat("Marcadores STR definidos:\n")
+print(marcadores_str)
+
+# Informações básicas
+length(marcadores_str)          # Número de marcadores
+seqlevels(marcadores_str)       # Cromossomos
+width(marcadores_str)           # Tamanho de cada região
+```
+
+### 4.2 Operações com Intervalos
+
+```{r granges-operations, eval=FALSE}
+library(GenomicRanges)
+
+# Definir regiões de SNPs forenses (ancestralidade)
+snps_ancestralidade <- GRanges(
+  seqnames = c("chr2", "chr15", "chr19"),
+  ranges = IRanges(
+    start = c(48000000, 28365814, 45411941),
+    width = 1  # SNPs são posições únicas
+  ),
+  rsid = c("rs1426654", "rs16891982", "rs12913832"),
+  gene = c("SLC24A5", "SLC45A2", "HERC2"),
+  traco = c("pigmentacao_pele", "pigmentacao_pele", "cor_olhos")
+)
+
+# Encontrar sobreposições entre marcadores e genes
+# (em cenário real, usaríamos TxDb.Hsapiens.UCSC.hg38.knownGene)
+
+# Calcular distâncias entre marcadores
+distancias <- distanceToNearest(marcadores_str, snps_ancestralidade)
+cat("Distâncias STR → SNP mais próximo:\n")
+print(distancias)
+
+# Subconjunto por cromossomo
+chr3_marcadores <- marcadores_str[seqnames(marcadores_str) == "chr3"]
+print(chr3_marcadores)
+
+# Ordenar por posição genômica
+ordenado <- sort(marcadores_str)
+print(ordenado)
+```
+
+### 4.3 Integração com Genoma de Referência
+
+```{r bsgenome-integration, eval=FALSE}
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(GenomicRanges)
+
+# Carregar genoma de referência
+hg38 <- BSgenome.Hsapiens.UCSC.hg38
+
+# Extrair sequência de uma região de marcador STR
+regiao_th01 <- GRanges("chr11", IRanges(start = 2159913, end = 2159990))
+seq_th01 <- getSeq(hg38, regiao_th01)
+cat("Sequência da região TH01 (hg38):\n")
+cat(as.character(seq_th01[[1]]), "\n")
+
+# Verificar conteúdo GC da região
+gc_th01 <- letterFrequency(seq_th01[[1]], "GC", as.prob = TRUE)
+cat("Conteúdo GC da região TH01:", round(gc_th01 * 100, 1), "%\n")
+```
+
+---
+
+## 5. Pacotes Específicos para Bioinformática Forense
+
+### 5.1 adegenet: Genética de Populações
+
+```{r adegenet-intro, eval=FALSE}
+library(adegenet)
+
+# Criar objeto genind com dados STR simulados
+# Formato: matriz de alelos (linhas = indivíduos, colunas = alelos)
+dados_str <- matrix(
+  c(15,16, 7,9.3, 28,30, 14,17,
+    14,18, 6,9,   29,31, 13,16,
+    15,17, 8,8,   28,28, 15,15,
+    16,16, 7,7,   30,30, 14,14,
+    14,15, 9,9.3, 28,29, 16,17),
+  nrow = 5, byrow = TRUE
+)
+colnames(dados_str) <- c("D3S1358.1","D3S1358.2",
+                          "TH01.1","TH01.2",
+                          "D21S11.1","D21S11.2",
+                          "D18S51.1","D18S51.2")
+rownames(dados_str) <- paste0("Ind_", 1:5)
+
+# Converter para objeto genind
+obj_genind <- df2genind(dados_str, ploidy = 2, sep = NULL)
+
+# Estatísticas básicas
+basic_stats <- basic.stats(obj_genind)
+cat("Heterozigosidade observada por locus:\n")
+print(basic_stats$Ho)
+
+cat("\nHeterozigosidade esperada por locus:\n")
+print(basic_stats$He)
+
+# F-statistics (Fis, Fit, Fst)
+f_stats <- hierfstat::basic.stats(obj_genind)
+cat("\nF-statistics:\n")
+print(f_stats)
+```
+
+### 5.2 Aplicações Forenses do adegenet
+
+```{r adegenet-forensic, eval=FALSE}
+library(adegenet)
+
+# Análise de estrutura populacional (PCA)
+# Útil para determinar ancestralidade de amostras desconhecidas
+
+# Simular dados de múltiplas populações
+# pop1 = Europeu, pop2 = Africano, pop3 = Asiático
+set.seed(42)
+n_ind <- 30
+n_loci <- 15
+
+# Criar dados simulados com diferenciação populacional
+dados_pop <- sim2pop(n.truen = c(10, 10, 10), n.loci = n_loci)
+
+# PCA para visualizar clusters populacionais
+pca_result <- dudi.pca(tab.genind(dados_pop), scannf = FALSE, nf = 3)
+
+# Plotar PCA colorido por população
+# s.class(pca_result$li, pop(dados_pop), lab = levels(pop(dados_pop)))
+
+# Cálculo de Likelihood Ratio para atribuição populacional
+# assignPOP() usa métodos Bayesianos para atribuir indivíduos
+```
+
+### 5.3 pegas: Genética Molecular e Evolutiva
+
+```{r pegas-intro, eval=FALSE}
+library(pegas)
+
+# Análise de haplótipos mitocondriais (forense materno)
+# Ler alinhamento de sequências mtDNA
+# data(woodmouse)  # Dataset exemplo
+
+# Calcular distâncias genéticas
+# dist_matrix <- dist.dna(seqs, model = "K80")
+
+# Construir rede de haplótipos
+# haplo_net <- haploNet(haplotype(seqs))
+# plot(haplo_net, size = attr(haplo_net, "freq"))
+
+# Teste de neutralidade (Tajima's D)
+# tajima_d <- tajima.test(seqs)
+# cat("Tajima's D:", tajima_d$D, "\n")
+# cat("P-valor:", tajima_d$P.value, "\n")
+```
+
+### 5.4 xcms: Toxicologia e Metabolômica
+
+```{r xcms-intro, eval=FALSE}
+library(xcms)
+library(CAMERA)
+
+# Pipeline básico de metabolômica forense
+# 1. Importar dados LC-MS/GC-MS (formatos mzML, netCDF)
+# raw_data <- readMSData(files = "amostra_sangue.mzML", mode = "onDisk")
+
+# 2. Detecção de picos cromatográficos
+# peaks <- findChromPeaks(raw_data, param = CentWaveParam(
+#   ppm = 10, peakwidth = c(5, 30), snthresh = 6
+# ))
+
+# 3. Alinhamento de retenção entre amostras
+# aligned <- adjustRt(peaks, param = ObiwarpParam())
+
+# 4. Agrupamento de features
+# grouped <- groupChromPeaks(aligned, param = PeakDensityParam(
+#   minFraction = 0.5, bw = 10
+# ))
+
+# 5. Anotação com CAMERA
+# annotated <- annotate(grouped)
+
+# 6. Exportar tabela de features
+# feature_table <- featureValues(annotated)
+# write.csv(feature_table, "features_metabolomicas.csv")
+```
+
+---
+
+## 6. Formatos Bioinformáticos Essenciais
+
+### 6.1 Visão Geral de Formatos
+
+| Formato | Uso Forense | Pacote R |
+|---------|-------------|----------|
+| FASTA | Sequências de referência, primers | Biostrings |
+| FASTQ | Dados brutos de NGS | ShortRead |
+| BAM/SAM | Alinhamentos de sequenciamento | Rsamtools |
+| VCF | Variantes (SNPs, INDELs) | VariantAnnotation |
+| GFF/GTF | Anotações genômicas | rtracklayer |
+| BED | Regiões genômicas | rtracklayer |
+| mzML/mzXML | Espectrometria de massas | xcms, MSnbase |
+
+### 6.2 Trabalhando com VCF (Variant Call Format)
+
+```{r vcf-example, eval=FALSE}
+library(VariantAnnotation)
+
+# Ler arquivo VCF (exemplo com dados simulados)
+# vcf_file <- "variantes_forenses.vcf"
+# vcf <- readVcf(vcf_file, genome = "hg38")
+
+# Estrutura do objeto VCF
+# info(vcf)      # Metadados das variantes
+# geno(vcf)      # Genótipos por amostra
+# fixed(vcf)     # Posição, REF, ALT, QUAL, FILTER
+
+# Filtrar variantes por qualidade
+# vcf_filtrado <- vcf[qual(vcf) >= 30]
+
+# Extrair SNPs forenses conhecidos
+# snps_rsids <- c("rs1426654", "rs16891982", "rs12913832")
+# snps_encontrados <- vcf[names(vcf) %in% snps_rsids]
+
+# Anotar variantes com informações funcionais
+# txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+# anotacoes <- locateVariants(vcf, txdb, AllVariants())
+```
+
+### 6.3 Importando Dados GFF/BED
+
+```{r gff-bed-example, eval=FALSE}
+library(rtracklayer)
+
+# Ler arquivo GFF3 com anotações de marcadores forenses
+# gff <- import.gff("marcadores_forenses.gff3")
+
+# Ler arquivo BED com regiões de interesse
+# bed <- import.bed("regioes_str.bed")
+
+# Sobrepor com dados de variantes
+# overlaps <- findOverlaps(variantes_granges, gff)
+# variantes_anotadas <- variantes_granges[queryHits(overlaps)]
+# mcols(variantes_anotadas)$gene <- gff$gene[subjectHits(overlaps)]
+```
+
+---
+
+## 7. Exercícios Práticos
+
+### Exercício 1: Manipulação de Sequências STR
+
+Usando o pacote Biostrings:
+
+a) Crie uma `DNAStringSet` com as seguintes sequências de STRs simuladas:
+   - D3S1358: "TCTGTCTGTCTGTCTGTCTG" (5 repetições TCTG)
+   - TH01: "TCATTCATTCATTCAT" (4 repetições TCAT)
+   - D21S11: "TCTATCTATCTATCTATCTATCTA" (repetição TCTA complexa)
+
+b) Calcule o conteúdo GC de cada sequência
+c) Gere os complementos reversos (para design de primers)
+d) Busque o motivo "TCTG" na sequência D3S1358 e reporte as posições
+
+### Exercício 2: Anotação Genômica de Marcadores
+
+Usando GenomicRanges:
+
+a) Defina um objeto `GRanges` com 10 marcadores STR do painel CODIS
+b) Ordene os marcadores por posição genômica
+c) Calcule o tamanho médio das regiões amplificadas
+d) Identifique quais marcadores estão no mesmo cromossomo
+
+### Exercício 3: Análise Populacional Básica
+
+Usando adegenet (com dados simulados):
+
+a) Crie um objeto `genind` com 20 indivíduos e 8 loci STR
+b) Calcule heterozigosidade observada e esperada
+c) Identifique o marcador mais informativo (maior He)
+d) Discuta como esses valores impactam o poder discriminatório forense
+
+---
+
+## 8. Recursos e Referências
+
+### Documentação Oficial
+- [Bioconductor](https://www.bioconductor.org/) — Portal principal
+- [Biostrings vignette](https://bioconductor.org/packages/release/bioc/vignettes/Biostrings/inst/doc/BiostringsQuickOverview.pdf)
+- [GenomicRanges introduction](https://bioconductor.org/packages/release/bioc/vignettes/GenomicRanges/inst/doc/GenomicRangesIntroduction.html)
+
+### Pacotes Forenses
+- `adegenet`: [Tutorial](https://adegenet.r-forge.r-project.org/)
+- `forensicTools`: [GitHub](https://github.com/) (buscar repositório ativo)
+- `DNAmixtures`: Análise de misturas de DNA
+- `EuroForMix`: Software integrado para LR em misturas
+
+### Normas Técnicas
+- SWGDAM Guidelines for STR Analysis
+- ENFSI Best Practice Manual for Forensic Genetics
+- ISO 17025: Requisitos para laboratórios de ensaio e calibração
+
+---
+
+## 📝 Resumo da Aula
+
+Nesta aula você aprendeu:
+
+- ✅ Ecossistema Bioconductor e instalação de pacotes
+- ✅ Classes Biostrings: DNAString, DNAStringSet
+- ✅ Operações com sequências: complemento reverso, busca de motivos
+- ✅ GenomicRanges para anotação de marcadores no genoma
+- ✅ Pacotes forenses: adegenet, pegas, xcms
+- ✅ Formatos bioinformáticos: FASTA, VCF, GFF, BED
+- ✅ Integração com genoma de referência hg38
+
+### Próxima Aula
+
+**Aula 04: Visualização Avançada de Dados Genômicos** — vamos criar visualizações profissionais de perfis STR, eletroferogramas simulados e mapas de cobertura genômica usando ggplot2 e pacotes especializados.
+
+```{r session-info}
+sessionInfo()
+```

@@ -1,0 +1,292 @@
+---
+title: "Gabarito - Exercícios da Aula 03"
+subtitle: "Módulo 01 - Bioconductor e Pacotes Especializados"
+author: "Curso R e Python para Bioinformática Forense"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Exercício 1: Manipulação de Sequências STR
+
+### Enunciado
+
+Usando o pacote Biostrings:
+
+a) Crie uma `DNAStringSet` com as seguintes sequências de STRs simuladas:
+   - D3S1358: "TCTGTCTGTCTGTCTGTCTG" (5 repetições TCTG)
+   - TH01: "TCATTCATTCATTCAT" (4 repetições TCAT)
+   - D21S11: "TCTATCTATCTATCTATCTATCTA" (repetição TCTA complexa)
+
+b) Calcule o conteúdo GC de cada sequência
+c) Gere os complementos reversos (para design de primers)
+d) Busque o motivo "TCTG" na sequência D3S1358 e reporte as posições
+
+### Solução
+
+```{r exercicio1, eval=FALSE}
+library(Biostrings)
+
+# a) Criar DNAStringSet com sequências STR
+str_seqs <- DNAStringSet(c(
+  "TCTGTCTGTCTGTCTGTCTG",      # D3S1358: 5x TCTG
+  "TCATTCATTCATTCAT",          # TH01: 4x TCAT
+  "TCTATCTATCTATCTATCTATCTA"   # D21S11: repetição TCTA complexa
+))
+names(str_seqs) <- c("D3S1358", "TH01", "D21S11")
+
+cat("Sequências STR criadas:\n")
+print(str_seqs)
+
+# b) Calcular conteúdo GC de cada sequência
+gc_content <- letterFrequency(str_seqs, letters = "GC", as.prob = TRUE)
+cat("\nConteúdo GC (%):\n")
+print(round(gc_content * 100, 2))
+
+# Interpretação forense:
+# - Conteúdo GC afeta temperatura de anelamento de primers
+# - STRs com GC extremo podem causar problemas de amplificação
+# - TH01 tem baixo GC (~25%), requer condições otimizadas
+
+# c) Gerar complementos reversos (essencial para primer reverse)
+rev_comp <- reverseComplement(str_seqs)
+cat("\nComplementos Reversos (primers reverse):\n")
+for (i in seq_along(rev_comp)) {
+  cat(sprintf("%s: %s\n", names(rev_comp)[i], as.character(rev_comp[i])))
+}
+
+# d) Buscar motivo "TCTG" em D3S1358
+motivo <- DNAString("TCTG")
+matches <- vmatchPattern(motivo, str_seqs["D3S1358"])
+
+cat("\nBusca de motivo 'TCTG' em D3S1358:\n")
+cat("Número de ocorrências:", length(matches[[1]]), "\n")
+cat("Posições de início:", start(matches[[1]]), "\n")
+cat("Posições de fim:", end(matches[[1]]), "\n")
+
+# Verificar se todas as posições são consecutivas (tandem repeat)
+posicoes <- start(matches[[1]])
+if (length(posicoes) > 1) {
+  gaps <- diff(posicoes)
+  if (all(gaps == width(motivo))) {
+    cat("✓ Repetições em tandem perfeitas (gap =", width(motivo), "bp)\n")
+  } else {
+    cat("⚠ Atenção: gaps irregulares detectados\n")
+  }
+}
+```
+
+### Explicação
+
+- **Biostrings** fornece classes S4 otimizadas para manipulação eficiente de sequências
+- O **conteúdo GC** influencia diretamente o design de primers e condições de PCR
+- **Complemento reverso** é necessário para o primer reverse em PCR multiplex
+- A busca de motivos com `vmatchPattern()` identifica unidades repetitivas de STRs
+- Em análises forenses reais, variações no número de repetições definem alelos diferentes
+
+---
+
+## Exercício 2: Anotação Genômica de Marcadores
+
+### Enunciado
+
+Usando GenomicRanges:
+
+a) Defina um objeto `GRanges` com 10 marcadores STR do painel CODIS
+b) Ordene os marcadores por posição genômica
+c) Calcule o tamanho médio das regiões amplificadas
+d) Identifique quais marcadores estão no mesmo cromossomo
+
+### Solução
+
+```{r exercicio2, eval=FALSE}
+library(GenomicRanges)
+
+# a) Definir GRanges com 10 marcadores CODIS (posições hg38 aproximadas)
+marcadores_codis <- GRanges(
+  seqnames = c("chr3", "chr11", "chr21", "chr18", "chr12",
+               "chr6", "chr2", "chr7", "chr13", "chr19"),
+  ranges = IRanges(
+    start = c(45540627, 2159913, 19181912, 63281520, 124895197,
+              88393498, 218027853, 84160704, 78297576, 45397862),
+    end = c(45540750, 2159990, 19182050, 63281680, 124895350,
+            88393620, 218027980, 84160830, 78297700, 45397990)
+  ),
+  marcador = c("D3S1358", "TH01", "D21S11", "D18S51", "vWA",
+               "SE33", "D2S1338", "D7S820", "D13S317", "D19S433"),
+  tipo = rep("STR", 10),
+  kit = rep("Identifiler Plus", 10)
+)
+
+cat("Marcadores CODIS definidos:\n")
+print(marcadores_codis)
+
+# b) Ordenar por posição genômica
+marcadores_ordenados <- sort(marcadores_codis)
+cat("\nMarcadores ordenados por posição genômica:\n")
+print(marcadores_ordenados)
+
+# c) Calcular tamanho médio das regiões amplificadas
+tamanhos <- width(marcadores_codis)
+cat("\nEstatísticas de tamanho das regiões:\n")
+cat("  Tamanho médio:", round(mean(tamanhos), 1), "bp\n")
+cat("  Tamanho mínimo:", min(tamanhos), "bp\n")
+cat("  Tamanho máximo:", max(tamanhos), "bp\n")
+cat("  Desvio padrão:", round(sd(tamanhos), 1), "bp\n")
+
+# Nota forense: regiões menores amplificam melhor em DNA degradado
+cat("\nNota: Regiões < 150 bp são preferidas para amostras degradadas\n")
+
+# d) Identificar marcadores no mesmo cromossomo
+cat("\nMarcadores agrupados por cromossomo:\n")
+por_cromossomo <- split(marcadores_codis, seqnames(marcadores_codis))
+for (chr in names(por_cromossomo)) {
+  n_marcadores <- length(por_cromossomo[[chr]])
+  nomes <- paste(mcols(por_cromossomo[[chr]])$marcador, collapse = ", ")
+  cat(sprintf("  %s: %d marcador(es) → %s\n", chr, n_marcadores, nomes))
+}
+
+# Verificar linkage disequilibrium potencial
+cat("\n⚠ Atenção forense: Marcadores no mesmo cromossomo podem ter LD\n")
+cat("   Em cálculos de LR, verificar independência estatística\n")
+```
+
+### Explicação
+
+- **GenomicRanges** permite representar e manipular intervalos genômicos de forma eficiente
+- A ordenação por posição é essencial para visualização em browsers genômicos (IGV, UCSC)
+- O **tamanho do amplicon** impacta diretamente o sucesso em amostras degradadas
+- Marcadores no **mesmo cromossomo** requerem verificação de equilíbrio de ligação (LD)
+- Em forense, painéis são desenhados para maximizar independência entre loci
+
+---
+
+## Exercício 3: Análise Populacional Básica
+
+### Enunciado
+
+Usando adegenet (com dados simulados):
+
+a) Crie um objeto `genind` com 20 indivíduos e 8 loci STR
+b) Calcule heterozigosidade observada e esperada
+c) Identifique o marcador mais informativo (maior He)
+d) Discuta como esses valores impactam o poder discriminatório forense
+
+### Solução
+
+```{r exercicio3, eval=FALSE}
+library(adegenet)
+
+# a) Criar dados simulados de 20 indivíduos com 8 loci STR
+set.seed(42)
+n_ind <- 20
+n_loci <- 8
+
+# Simular genótipos (alelos codificados numericamente)
+dados_raw <- matrix(
+  sample(10:20, n_ind * n_loci * 2, replace = TRUE),
+  nrow = n_ind,
+  ncol = n_loci * 2
+)
+
+colnames(dados_raw) <- c(
+  "D3S1358.1", "D3S1358.2",
+  "TH01.1", "TH01.2",
+  "D21S11.1", "D21S11.2",
+  "D18S51.1", "D18S51.2",
+  "vWA.1", "vWA.2",
+  "FGA.1", "FGA.2",
+  "D8S1179.1", "D8S1179.2",
+  "CSF1PO.1", "CSF1PO.2"
+)
+rownames(dados_raw) <- paste0("Ind_", sprintf("%02d", 1:n_ind))
+
+# Converter para objeto genind
+obj_genind <- df2genind(dados_raw, ploidy = 2, sep = NULL)
+
+cat("Objeto genind criado:\n")
+print(obj_genind)
+
+# b) Calcular heterozigosidades
+stats <- basic.stats(obj_genind)
+
+cat("\n=== Estatísticas por Locus ===\n")
+resultado <- data.frame(
+  Locus = names(stats$Ho),
+  Ho = round(stats$Ho, 4),
+  He = round(stats$He, 4),
+  Fis = round(stats$Fis, 4)
+)
+print(resultado)
+
+# Médias gerais
+cat("\nHeterozigosidade média observada (Ho):", round(mean(stats$Ho), 4), "\n")
+cat("Heterozigosidade média esperada (He):", round(mean(stats$He), 4), "\n")
+
+# c) Identificar marcador mais informativo
+marcador_mais_informativo <- names(which.max(stats$He))
+he_maximo <- max(stats$He)
+
+cat("\n★ Marcador mais informativo:", marcador_mais_informativo, "\n")
+cat("  Heterozigosidade esperada (He):", round(he_maximo, 4), "\n")
+
+# Ranking completo
+cat("\nRanking de informatividade (He decrescente):\n")
+ranking <- sort(stats$He, decreasing = TRUE)
+for (i in seq_along(ranking)) {
+  cat(sprintf("  %dº %s: He = %.4f\n", i, names(ranking)[i], ranking[i]))
+}
+
+# d) Discussão sobre poder discriminatório
+cat("\n=== Impacto no Poder Discriminatório Forense ===\n")
+cat("• He alto (> 0.7): marcador altamente discriminativo\n")
+cat("• He médio (0.5-0.7): útil em combinação com outros marcadores\n")
+cat("• He baixo (< 0.5): pouco informativo individualmente\n")
+cat("\nPara identificação humana, painéis usam múltiplos STRs com He alto\n")
+cat("O poder discriminatório combinado é calculado pelo produto das\n")
+cat("frequências genotípicas (assumindo independência/HWE)\n")
+```
+
+### Explicação
+
+- **Heterozigosidade esperada (He)** mede a diversidade genética de um marcador
+- Valores altos de He indicam maior **poder discriminatório** para identificação
+- Em forense, combina-se múltiplos STRs para atingir probabilidades de match extremamente baixas
+- O **Fis** indica desvios do equilíbrio Hardy-Weinberg (possíveis subestruturas populacionais)
+- Painéis CODIS/ENFSI selecionam marcadores com He > 0.7 para maximizar discriminação
+
+---
+
+## Conceitos-Chave Revisados
+
+| Conceito | Pacote | Aplicação Forense |
+|----------|--------|-------------------|
+| DNAStringSet | Biostrings | Armazenar sequências de STRs/primers |
+| reverseComplement | Biostrings | Design de primers reverse |
+| vmatchPattern | Biostrings | Identificar unidades repetitivas |
+| GRanges | GenomicRanges | Mapear marcadores no genoma |
+| genind | adegenet | Análise de genética de populações |
+| basic.stats | adegenet | Calcular Ho, He, Fis |
+| VCF | VariantAnnotation | Processar variantes de NGS |
+
+---
+
+## ⚖️ Nota sobre Validação de Métodos
+
+> Em laboratórios forenses acreditados (ISO 17025), todo pipeline bioinformático deve passar por:
+> - **Validação analítica**: sensibilidade, especificidade, limites de detecção
+> - **Verificação computacional**: testes unitários, dados conhecidos, reprodutibilidade
+> - **Documentação**: SOPs detalhados, versionamento de software e parâmetros
+> - **Auditoria**: rastreamento completo de entradas, processamento e saídas
+
+```{r session-info}
+sessionInfo()
+```
